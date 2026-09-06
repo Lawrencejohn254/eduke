@@ -9,6 +9,7 @@ import {
   CheckCircle2,
   AlertCircle,
   Loader2,
+  MapPin,
 } from "lucide-react";
 
 type AttendanceRecord = {
@@ -24,6 +25,12 @@ type AttendanceRecord = {
   minutes_late: number | null;
   created_at: string;
   updated_at: string;
+};
+
+type LocationData = {
+  latitude: number;
+  longitude: number;
+  accuracy: number;
 };
 
 type Props = {
@@ -58,12 +65,82 @@ function formatDuration(
 
   if (difference < 0) return null;
 
-  const totalMinutes = Math.floor(difference / 60000);
+  const totalMinutes = Math.floor(
+    difference / 60000
+  );
 
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
 
   return `${hours}h ${minutes}m`;
+}
+
+/*
+ * =========================================================
+ * GET CURRENT GPS LOCATION
+ * =========================================================
+ */
+
+function getCurrentLocation(): Promise<GeolocationPosition> {
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) {
+      reject(
+        new Error(
+          "Location services are not supported by this browser."
+        )
+      );
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        resolve(position);
+      },
+
+      (error) => {
+        console.error("Geolocation error:", error);
+
+        switch (error.code) {
+          case error.PERMISSION_DENIED:
+            reject(
+              new Error(
+                "Location permission was denied. Please allow location access and try again."
+              )
+            );
+            break;
+
+          case error.POSITION_UNAVAILABLE:
+            reject(
+              new Error(
+                "Your location is currently unavailable. Please ensure GPS or location services are enabled."
+              )
+            );
+            break;
+
+          case error.TIMEOUT:
+            reject(
+              new Error(
+                "Location request timed out. Please move to an area with better GPS or network signal and try again."
+              )
+            );
+            break;
+
+          default:
+            reject(
+              new Error(
+                "Unable to determine your current location."
+              )
+            );
+        }
+      },
+
+      {
+        enableHighAccuracy: true,
+        timeout: 20000,
+        maximumAge: 30000,
+      }
+    );
+  });
 }
 
 export default function StaffAttendanceCard({
@@ -79,22 +156,70 @@ export default function StaffAttendanceCard({
 
   const [loading, setLoading] = useState(false);
 
-  const [message, setMessage] = useState<string | null>(
-    null
-  );
+  const [gettingLocation, setGettingLocation] =
+    useState(false);
 
-  const [error, setError] = useState<string | null>(
-    null
-  );
+  const [message, setMessage] =
+    useState<string | null>(null);
+
+  const [error, setError] =
+    useState<string | null>(null);
+
+  /*
+   * =========================================================
+   * SIGN IN WITH GPS VALIDATION
+   * =========================================================
+   */
 
   async function handleSignIn() {
     setLoading(true);
+    setGettingLocation(true);
     setError(null);
     setMessage(null);
 
     try {
+      /*
+       * Step 1:
+       * Get staff GPS coordinates
+       */
+
+      const location =
+        await getCurrentLocation();
+
+      setGettingLocation(false);
+
+      /*
+       * Step 2:
+       * Validate GPS accuracy
+       *
+       * 200 metres is a reasonable initial limit.
+       * You can tighten this later.
+       */
+
+      const MAX_ACCURACY = 200;
+
+      if (location.accuracy > MAX_ACCURACY) {
+        throw new Error(
+          `Your GPS accuracy is too low (${Math.round(
+            location.accuracy
+          )}m). Please move outdoors or to an area with better GPS signal and try again.`
+        );
+      }
+
+      /*
+       * Step 3:
+       * Send coordinates to PostgreSQL RPC
+       *
+       * The backend performs the actual geofence validation.
+       */
+
       const { data, error } = await supabase.rpc(
-        "staff_sign_in"
+        "staff_sign_in",
+        {
+          p_latitude: location.latitude,
+          p_longitude: location.longitude,
+          p_accuracy: location.accuracy,
+        }
       );
 
       if (error) {
@@ -117,7 +242,7 @@ export default function StaffAttendanceCard({
         `Signed in successfully at ${formatTime(
           record.sign_in_at,
           timezone
-        )}.`
+        )}. Location verified successfully.`
       );
     } catch (err) {
       console.error(err);
@@ -129,8 +254,15 @@ export default function StaffAttendanceCard({
       );
     } finally {
       setLoading(false);
+      setGettingLocation(false);
     }
   }
+
+  /*
+   * =========================================================
+   * SIGN OUT
+   * =========================================================
+   */
 
   async function handleSignOut() {
     setLoading(true);
@@ -193,7 +325,10 @@ export default function StaffAttendanceCard({
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
 
+      {/* HEADER */}
+
       <div className="flex items-center justify-between mb-4">
+
         <div>
           <p className="text-sm font-semibold text-gray-900">
             Staff Attendance
@@ -210,6 +345,7 @@ export default function StaffAttendanceCard({
             className="text-eduke-green"
           />
         </div>
+
       </div>
 
       {/* NOT SIGNED IN */}
@@ -218,13 +354,27 @@ export default function StaffAttendanceCard({
         <div className="space-y-4">
 
           <div className="bg-gray-50 rounded-lg p-4">
-            <p className="text-sm font-medium text-gray-900">
-              You have not signed in today.
-            </p>
 
-            <p className="text-xs text-gray-500 mt-1">
-              Sign in to record your official attendance.
-            </p>
+            <div className="flex items-start gap-3">
+
+              <MapPin
+                size={18}
+                className="text-eduke-green mt-0.5 shrink-0"
+              />
+
+              <div>
+                <p className="text-sm font-medium text-gray-900">
+                  You have not signed in today.
+                </p>
+
+                <p className="text-xs text-gray-500 mt-1">
+                  Your location will be verified before
+                  recording official attendance.
+                </p>
+              </div>
+
+            </div>
+
           </div>
 
           <button
@@ -238,7 +388,10 @@ export default function StaffAttendanceCard({
                   size={16}
                   className="animate-spin"
                 />
-                Signing in...
+
+                {gettingLocation
+                  ? "Verifying location..."
+                  : "Signing in..."}
               </>
             ) : (
               <>
@@ -247,6 +400,14 @@ export default function StaffAttendanceCard({
               </>
             )}
           </button>
+
+          <p className="text-[11px] text-center text-gray-400">
+            <MapPin
+              size={11}
+              className="inline mr-1"
+            />
+            Location verification is required for attendance.
+          </p>
 
         </div>
       )}
@@ -259,6 +420,7 @@ export default function StaffAttendanceCard({
           <div className="bg-green-50 border border-green-100 rounded-lg p-4">
 
             <div className="flex items-center gap-2">
+
               <CheckCircle2
                 size={18}
                 className="text-green-600"
@@ -267,23 +429,29 @@ export default function StaffAttendanceCard({
               <p className="text-sm font-semibold text-green-800">
                 Currently On Duty
               </p>
+
             </div>
 
             <p className="text-sm text-green-700 mt-3">
+
               Signed in at{" "}
+
               <span className="font-semibold">
                 {formatTime(
                   attendance?.sign_in_at ?? null,
                   timezone
                 )}
               </span>
+
             </p>
 
-            {attendance?.minutes_late &&
+            {attendance?.minutes_late !== null &&
               attendance.minutes_late > 0 && (
+
                 <p className="text-xs text-orange-600 mt-1">
                   {attendance.minutes_late} minutes late
                 </p>
+
               )}
 
           </div>
@@ -320,6 +488,7 @@ export default function StaffAttendanceCard({
           <div className="bg-blue-50 border border-blue-100 rounded-lg p-4">
 
             <div className="flex items-center gap-2 mb-3">
+
               <CheckCircle2
                 size={18}
                 className="text-blue-600"
@@ -328,11 +497,13 @@ export default function StaffAttendanceCard({
               <p className="text-sm font-semibold text-blue-800">
                 Attendance Completed
               </p>
+
             </div>
 
             <div className="space-y-2 text-sm">
 
               <div className="flex justify-between">
+
                 <span className="text-gray-500">
                   Signed in
                 </span>
@@ -343,9 +514,11 @@ export default function StaffAttendanceCard({
                     timezone
                   )}
                 </span>
+
               </div>
 
               <div className="flex justify-between">
+
                 <span className="text-gray-500">
                   Signed out
                 </span>
@@ -356,10 +529,12 @@ export default function StaffAttendanceCard({
                     timezone
                   )}
                 </span>
+
               </div>
 
               {duration && (
                 <div className="flex justify-between">
+
                   <span className="text-gray-500">
                     Duration
                   </span>
@@ -367,6 +542,7 @@ export default function StaffAttendanceCard({
                   <span className="font-medium text-gray-900">
                     {duration}
                   </span>
+
                 </div>
               )}
 
