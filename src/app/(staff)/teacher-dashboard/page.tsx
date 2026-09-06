@@ -1,0 +1,352 @@
+import { createClient } from "@/lib/supabase/server";
+import { getProfileOrRedirect } from "@/lib/get-profile";
+import { getDateInTimezone } from "@/lib/date";
+import AIBanner from "@/components/AIBanner";
+import StaffAttendanceCard from "@/components/StaffAttendanceCard";
+import Link from "next/link";
+import { EmptyState } from "@/components/Loaders";
+
+export default async function TeacherDashboardPage() {
+  const profile = await getProfileOrRedirect();
+  const supabase = await createClient();
+
+  const staffId = profile.staff_id;
+  const isHod = profile.role === "hod";
+
+  /*
+   * SCHOOL TIMEZONE
+   */
+
+  const { data: school } = await supabase
+    .from("schools")
+    .select("timezone")
+    .eq("id", profile.school_id)
+    .maybeSingle();
+
+  const timezone = school?.timezone ?? "Africa/Nairobi";
+
+  /*
+   * TODAY'S STAFF ATTENDANCE
+   *
+   * The StaffAttendanceCard handles sign-in/sign-out
+   * through secure RPC functions.
+   */
+
+  const today = getDateInTimezone(timezone);
+
+const { data: todayStaffAttendance } = staffId
+  ? await supabase
+      .from("staff_attendance")
+      .select(`
+        id,
+        school_id,
+        staff_id,
+        attendance_date,
+        sign_in_at,
+        sign_out_at,
+        sign_in_method,
+        sign_out_method,
+        status,
+        minutes_late,
+        created_at,
+        updated_at
+      `)
+      .eq("staff_id", staffId)
+      .eq("attendance_date", today)
+      .maybeSingle()
+  : { data: null };
+
+  /*
+   * TEACHING ASSIGNMENTS
+   */
+
+  const { data: assignments } = staffId
+    ? await supabase
+        .from("teacher_subjects")
+        .select(`
+          subject:subjects(name),
+          stream:streams(
+            name,
+            class:classes(name)
+          )
+        `)
+        .eq("teacher_id", staffId)
+    : { data: [] };
+
+  const classesStreams = Array.from(
+    new Set(
+      (assignments ?? [])
+        .map((assignment) => {
+          const stream = assignment.stream as unknown as {
+            name: string;
+            class: {
+              name: string;
+            } | null;
+          } | null;
+
+          if (!stream) return "";
+
+          return `${stream.class?.name ?? ""} ${stream.name}`;
+        })
+        .filter(Boolean)
+    )
+  );
+
+  /*
+   * LESSON PLANS THIS WEEK
+   */
+
+  const weekAgo = new Date();
+
+  weekAgo.setDate(weekAgo.getDate() - 7);
+
+  const { data: lessonPlans } = staffId
+    ? await supabase
+        .from("lesson_plans")
+        .select("status")
+        .eq("teacher_id", staffId)
+        .gte("created_at", weekAgo.toISOString())
+    : { data: [] };
+
+  const lpCounts = {
+    Submitted: 0,
+    Draft: 0,
+    Returned: 0,
+  };
+
+  for (const lessonPlan of lessonPlans ?? []) {
+    if (lessonPlan.status in lpCounts) {
+      lpCounts[
+        lessonPlan.status as keyof typeof lpCounts
+      ]++;
+    }
+  }
+
+  /*
+   * SCHEMES OF WORK
+   */
+
+  const { data: schemes } = staffId
+    ? await supabase
+        .from("schemes_of_work")
+        .select("status")
+        .eq("teacher_id", staffId)
+    : { data: [] };
+
+  /*
+   * PENDING MARK ENTRY
+   */
+
+  const { count: pendingMarks } = staffId
+    ? await supabase
+        .from("exam_results")
+        .select("id", {
+          count: "exact",
+          head: true,
+        })
+        .eq("entered_by", staffId)
+        .is("marks_obtained", null)
+    : { count: 0 };
+
+  /*
+   * HOD PENDING REVIEWS
+   */
+
+  let pendingReviews: {
+    id: string;
+    topic: string;
+    teacher: string | null;
+  }[] = [];
+
+  if (isHod) {
+    const { data } = await supabase
+      .from("lesson_plans")
+      .select(`
+        id,
+        topic,
+        status,
+        teacher:staff!lesson_plans_teacher_id_fkey(
+          first_name,
+          last_name
+        )
+      `)
+      .eq("status", "Submitted")
+      .limit(10);
+
+    pendingReviews = (data ?? []).map((item) => {
+      const teacher = item.teacher as unknown as {
+        first_name: string;
+        last_name: string;
+      } | null;
+
+      return {
+        id: item.id,
+        topic: item.topic,
+        teacher: teacher
+          ? `${teacher.first_name} ${teacher.last_name}`
+          : null,
+      };
+    });
+  }
+
+  return (
+    <div className="space-y-6">
+
+      {/* PAGE HEADER */}
+
+      <div>
+        <h1 className="text-xl font-bold text-gray-900">
+          My Dashboard
+        </h1>
+
+        <p className="text-sm text-gray-500">
+          Welcome back, {profile.first_name}.
+        </p>
+      </div>
+
+
+      {/* AI BANNER */}
+
+      <AIBanner />
+
+
+      {/* STAFF ATTENDANCE + STATISTICS */}
+
+      <div className="grid lg:grid-cols-3 gap-4">
+
+        {/* STAFF ATTENDANCE */}
+
+        <div className="lg:col-span-1">
+          <StaffAttendanceCard
+            initialAttendance={todayStaffAttendance}
+            timezone={timezone}
+          />
+        </div>
+
+
+        {/* TEACHER STATISTICS */}
+
+        <div className="lg:col-span-2 grid grid-cols-2 gap-4">
+
+          {/* CLASSES */}
+
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+
+            <p className="text-xs font-medium text-gray-500">
+              My Classes &amp; Streams
+            </p>
+
+            <p className="text-sm font-semibold text-gray-900 mt-1">
+              {classesStreams.length
+                ? classesStreams.join(", ")
+                : "No streams assigned yet"}
+            </p>
+
+          </div>
+
+
+          {/* LESSON PLANS */}
+
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+
+            <p className="text-xs font-medium text-gray-500">
+              Lesson Plans This Week
+            </p>
+
+            <p className="text-sm text-gray-900 mt-1">
+              {lpCounts.Submitted} submitted
+              {" · "}
+              {lpCounts.Draft} pending
+              {" · "}
+              {lpCounts.Returned} returned
+            </p>
+
+          </div>
+
+
+          {/* SCHEMES */}
+
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+
+            <p className="text-xs font-medium text-gray-500">
+              Schemes of Work
+            </p>
+
+            <p className="text-sm text-gray-900 mt-1">
+              {(schemes ?? []).length} total
+            </p>
+
+          </div>
+
+
+          {/* PENDING MARKS */}
+
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+
+            <p className="text-xs font-medium text-gray-500">
+              Pending Mark Entry
+            </p>
+
+            <p className="text-2xl font-bold text-gray-900 mt-1">
+              {pendingMarks ?? 0}
+            </p>
+
+          </div>
+
+        </div>
+
+      </div>
+
+
+      {/* HOD PENDING REVIEWS */}
+
+      {isHod && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+
+          <p className="text-sm font-semibold text-gray-700 mb-3">
+            Pending Reviews
+          </p>
+
+          {pendingReviews.length === 0 ? (
+            <EmptyState
+              title="Nothing to review"
+              description="Submitted lesson plans from your department will appear here."
+            />
+          ) : (
+            <div className="space-y-2">
+
+              {pendingReviews.map((lessonPlan) => (
+                <div
+                  key={lessonPlan.id}
+                  className="flex items-center justify-between border border-gray-100 rounded-lg p-3"
+                >
+
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">
+                      {lessonPlan.topic}
+                    </p>
+
+                    <p className="text-xs text-gray-500">
+                      by {lessonPlan.teacher ?? "Teacher"}
+                    </p>
+                  </div>
+
+                  <Link
+                    href="/lesson-plans"
+                    className="text-xs font-semibold text-eduke-green hover:underline"
+                  >
+                    Review →
+                  </Link>
+
+                </div>
+              ))}
+
+            </div>
+          )}
+
+        </div>
+      )}
+
+    </div>
+  );
+}
