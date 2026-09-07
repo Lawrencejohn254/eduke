@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { getProfileOrRedirect } from "@/lib/get-profile";
+import StaffAttendanceCard from "@/components/StaffAttendanceCard";
 import StatCard from "@/components/StatCard";
 import {
   FeeCollectionChart,
@@ -41,6 +42,23 @@ export default async function DashboardPage() {
     .maybeSingle();
 
   const timezone = school?.timezone ?? "Africa/Nairobi";
+
+      /*
+    * =========================================================
+    * LOGGED-IN USER STAFF RECORD
+    * =========================================================
+    *
+    * Every employee, including Principal and Deputy Principal,
+    * can have personal attendance.
+    */
+
+    const { data: currentStaff } = await supabase
+      .from("staff")
+      .select("id")
+      .eq("profile_id", profile.id)
+      .eq("school_id", profile.school_id)
+      .eq("status", "Active")
+      .maybeSingle();
 
   /*
    * =========================================================
