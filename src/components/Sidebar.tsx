@@ -23,6 +23,8 @@ import {
   Settings,
   GraduationCap,
   ShieldCheck,
+  Clock,
+  FileBarChart,
 } from "lucide-react";
 
 type NavItem = {
@@ -65,6 +67,18 @@ const PRINCIPAL_NAV: NavItem[] = [
     label: "Staff Requests",
     href: "/staff/requests",
     icon: UserPlus,
+  },
+
+  {
+    label: "Staff Attendance",
+    href: "/staff-attendance",
+    icon: Clock,
+  },
+
+  {
+    label: "Attendance Reports",
+    href: "/staff-attendance/reports",
+    icon: FileBarChart,
   },
 
   {

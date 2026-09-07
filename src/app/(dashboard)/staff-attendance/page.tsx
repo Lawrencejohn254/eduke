@@ -282,7 +282,9 @@ export default async function StaffAttendancePage({
     staff?.length ?? 0;
 
   const signedIn =
-    attendance?.length ?? 0;
+  attendance?.filter(
+    (record) => record.sign_in_at !== null
+  ).length ?? 0;
 
   const signedOut =
     attendance?.filter(
@@ -343,6 +345,29 @@ export default async function StaffAttendancePage({
       }
     ).format(new Date(timestamp));
   }
+
+  function formatDuration(
+  signIn: string | null | undefined,
+  signOut: string | null | undefined
+) {
+  if (!signIn || !signOut) return "—";
+
+  const start = new Date(signIn).getTime();
+  const end = new Date(signOut).getTime();
+
+  const difference = end - start;
+
+  if (difference < 0) return "—";
+
+  const totalMinutes = Math.floor(
+    difference / 60000
+  );
+
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+
+  return `${hours}h ${minutes}m`;
+}
 
   /*
    * =====================================================
@@ -506,6 +531,14 @@ export default async function StaffAttendancePage({
                 </th>
 
                 <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase">
+                  Duration
+                </th>
+
+                <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase">
+                  Issues
+                </th>
+
+                <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase">
                   Status
                 </th>
 
@@ -520,7 +553,7 @@ export default async function StaffAttendancePage({
 
                 <tr>
                   <td
-                    colSpan={6}
+                    colSpan={8}
                     className="px-5 py-12 text-center text-gray-500"
                   >
                     No staff attendance records found.
@@ -533,6 +566,75 @@ export default async function StaffAttendancePage({
 
                   const record =
                     staffMember.attendance;
+
+                    const issues: string[] = [];
+
+                  /*
+                  * Staff did not sign in
+                  */
+
+                  if (!record?.sign_in_at) {
+                    issues.push("No sign-in");
+                  }
+
+                  /*
+                  * Signed in but has not signed out
+                  */
+
+                  if (
+                    record?.sign_in_at &&
+                    !record?.sign_out_at &&
+                    selectedDate !== today
+                  ) {
+                    issues.push("No sign-out");
+                  }
+
+                  /*
+                  * Late arrival
+                  */
+
+                  if (
+                    record?.minutes_late &&
+                    record.minutes_late > 0
+                  ) {
+                    issues.push(
+                      `${record.minutes_late} min late`
+                    );
+                  }
+
+                  /*
+                  * Short working day
+                  *
+                  * Only evaluate completed attendance.
+                  */
+
+                  if (
+                    record?.sign_in_at &&
+                    record?.sign_out_at
+                  ) {
+                    const start = new Date(
+                      record.sign_in_at
+                    ).getTime();
+
+                    const end = new Date(
+                      record.sign_out_at
+                    ).getTime();
+
+                    const workedMinutes =
+                      Math.floor((end - start) / 60000);
+
+                    /*
+                    * Example threshold:
+                    * Less than 4 hours.
+                    *
+                    * Later this should become
+                    * configurable per school.
+                    */
+
+                    if (workedMinutes < 240) {
+                      issues.push("Short workday");
+                    }
+                  }
 
                   let statusLabel =
                     "Not Signed In";
@@ -658,6 +760,52 @@ export default async function StaffAttendancePage({
                         )}
 
                       </td>
+
+                      {/* WORKING DURATION */}
+
+                    <td className="px-5 py-4">
+
+                      <span className="font-medium text-gray-700">
+
+                        {formatDuration(
+                          record?.sign_in_at,
+                          record?.sign_out_at
+                        )}
+
+                      </span>
+
+                    </td>
+
+                    {/* ATTENDANCE ISSUES */}
+
+                    <td className="px-5 py-4">
+
+                      {issues.length > 0 ? (
+
+                        <div className="flex flex-wrap gap-1">
+
+                          {issues.map((issue) => (
+
+                            <span
+                              key={issue}
+                              className="inline-flex items-center rounded-full bg-red-50 px-2 py-1 text-[11px] font-medium text-red-700"
+                            >
+                              {issue}
+                            </span>
+
+                          ))}
+
+                        </div>
+
+                      ) : (
+
+                        <span className="inline-flex items-center rounded-full bg-green-50 px-2 py-1 text-[11px] font-medium text-green-700">
+                          No issues
+                        </span>
+
+                      )}
+
+                    </td>
 
 
                       {/* STATUS */}
