@@ -20,6 +20,7 @@ import {
   Clock,
   UserX,
   ArrowRight,
+  MapPin,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -636,6 +637,14 @@ export default async function DashboardPage() {
         >
           <Download size={16} />
           Download Term Report
+        </Link>
+
+        <Link
+          href="/settings/school-location"
+          className="flex items-center gap-2 bg-white border border-gray-200 text-sm font-medium px-4 py-2.5 rounded-lg hover:border-eduke-green transition-colors"
+        >
+          <MapPin size={16} />
+          School Location & Geofence
         </Link>
 
       </div>
