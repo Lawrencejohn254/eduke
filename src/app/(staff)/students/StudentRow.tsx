@@ -223,48 +223,49 @@ export default function StudentRow({
                     />
                   </div>
                   {error && <p className="text-sm text-red-600">{error}</p>}
+
+                  <div className="pt-4 border-t border-gray-100 space-y-3">
+                    <div>
+                      <p className="text-xs font-semibold text-gray-500 mb-1.5 flex items-center gap-1"><UserPlus size={13} /> Link a Parent/Guardian</p>
+                      <div className="space-y-1.5">
+                        <input
+                          value={guardianName}
+                          onChange={(e) => setGuardianName(e.target.value)}
+                          placeholder="Guardian full name"
+                          className="w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs"
+                        />
+                        <div className="flex gap-1.5">
+                          <input
+                            value={guardianPhone}
+                            onChange={(e) => setGuardianPhone(e.target.value)}
+                            placeholder="Phone (e.g. 0722000000)"
+                            className="flex-1 rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs"
+                          />
+                          <select
+                            value={guardianRelationship}
+                            onChange={(e) => setGuardianRelationship(e.target.value)}
+                            className="rounded-lg border border-gray-300 px-2 py-1.5 text-xs"
+                          >
+                            {RELATIONSHIPS.map((r) => <option key={r}>{r}</option>)}
+                          </select>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleLinkGuardian}
+                          disabled={guardianBusy || !guardianName.trim() || !guardianPhone.trim()}
+                          className="flex items-center gap-1.5 bg-white border border-gray-300 text-xs font-medium px-3 py-1.5 rounded-lg disabled:opacity-50"
+                        >
+                          {guardianBusy ? <Loader2 size={13} className="animate-spin" /> : <UserPlus size={13} />} Link Guardian
+                        </button>
+                      </div>
+                      {guardianMessage && <p className="text-xs text-gray-500 mt-1">{guardianMessage}</p>}
+                    </div>
+                  </div>
+
                   <button type="submit" disabled={saving} className="w-full flex items-center justify-center gap-2 bg-eduke-green text-white font-medium rounded-lg py-2.5 text-sm disabled:opacity-50">
                     {saving && <Loader2 size={16} className="animate-spin" />} Save Changes
                   </button>
                 </form>
-
-                <div className="mt-4 pt-4 border-t border-gray-100 space-y-3">
-                  <div>
-                    <p className="text-xs font-semibold text-gray-500 mb-1.5 flex items-center gap-1"><UserPlus size={13} /> Link a Parent/Guardian</p>
-                    <div className="space-y-1.5">
-                      <input
-                        value={guardianName}
-                        onChange={(e) => setGuardianName(e.target.value)}
-                        placeholder="Guardian full name"
-                        className="w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs"
-                      />
-                      <div className="flex gap-1.5">
-                        <input
-                          value={guardianPhone}
-                          onChange={(e) => setGuardianPhone(e.target.value)}
-                          placeholder="Phone (e.g. 0722000000)"
-                          className="flex-1 rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs"
-                        />
-                        <select
-                          value={guardianRelationship}
-                          onChange={(e) => setGuardianRelationship(e.target.value)}
-                          className="rounded-lg border border-gray-300 px-2 py-1.5 text-xs"
-                        >
-                          {RELATIONSHIPS.map((r) => <option key={r}>{r}</option>)}
-                        </select>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={handleLinkGuardian}
-                        disabled={guardianBusy || !guardianName.trim() || !guardianPhone.trim()}
-                        className="flex items-center gap-1.5 bg-white border border-gray-300 text-xs font-medium px-3 py-1.5 rounded-lg disabled:opacity-50"
-                      >
-                        {guardianBusy ? <Loader2 size={13} className="animate-spin" /> : <UserPlus size={13} />} Link Guardian
-                      </button>
-                    </div>
-                    {guardianMessage && <p className="text-xs text-gray-500 mt-1">{guardianMessage}</p>}
-                  </div>
-                </div>
               </div>
             </div>
           </td>

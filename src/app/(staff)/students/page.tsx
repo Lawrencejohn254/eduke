@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getProfileOrRedirect } from "@/lib/get-profile";
 import { EmptyState } from "@/components/Loaders";
 import NewStudentForm from "./NewStudentForm";
-import StudentRow from "./StudentRow";
+import StudentsTable from "./StudentsTable";
 import Link from "next/link";
 import { ArrowUpCircle } from "lucide-react";
 
@@ -51,47 +51,11 @@ export default async function StudentsPage() {
         <EmptyState title="No students yet" description="Add your first student to get started." />
       ) : (
         students && students.length > 0 && (
-        <div className="eduke-table-wrap bg-white rounded-xl border border-gray-100">
-          <table>
-            <thead>
-              <tr className="text-left text-xs text-gray-500 border-b border-gray-100">
-                <th className="p-3">Admission No.</th>
-                <th className="p-3">Name</th>
-                <th className="p-3">Gender</th>
-                <th className="p-3">Class</th>
-                <th className="p-3">Stream</th>
-                <th className="p-3">Status</th>
-                <th className="p-3"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {students.map((s) => {
-                const klass = s.class as unknown as { name: string } | null;
-                const stream = s.stream as unknown as { name: string } | null;
-                return (
-                  <StudentRow
-                    key={s.id}
-                    id={s.id}
-                    admissionNumber={s.admission_number}
-                    firstName={s.first_name}
-                    lastName={s.last_name}
-                    gender={s.gender}
-                    status={s.status}
-                    streamId={s.stream_id}
-                    dateOfBirth={s.date_of_birth}
-                    kcpeIndex={s.kcpe_index}
-                    nemisId={s.nemis_id}
-                    previousSchool={s.previous_school}
-                    className={klass?.name ?? "-"}
-                    streamName={stream?.name ?? "-"}
-                    streams={(streams ?? []) as never}
-                    canEdit={canAdd}
-                  />
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+          <StudentsTable
+            students={students as never}
+            streams={streams ?? []}
+            canEdit={canAdd}
+          />
         )
       )}
     </div>
