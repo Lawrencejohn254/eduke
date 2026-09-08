@@ -4,6 +4,7 @@ import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { GraduationCap, Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import TimeOfDayBackground from "@/components/TimeOfDayBackground";
 
 function VerifyLoginForm() {
   const router = useRouter();
@@ -50,21 +51,23 @@ function VerifyLoginForm() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-eduke-bg px-4">
-      <div className="w-full max-w-sm">
+    <div className="relative min-h-screen flex items-center justify-center px-4 overflow-hidden">
+      <TimeOfDayBackground />
+
+      <div className="relative z-10 w-full max-w-sm">
         <div className="flex flex-col items-center mb-6">
           <div className="bg-eduke-green rounded-2xl p-3 mb-3">
             <GraduationCap size={32} className="text-eduke-gold" />
           </div>
-          <h1 className="text-xl font-bold text-eduke-green">Verify it's you</h1>
-          <p className="text-sm text-gray-500 text-center mt-1">
+          <h1 className="text-xl font-bold text-white drop-shadow-sm">Verify it's you</h1>
+          <p className="text-sm text-white/80 text-center mt-1 drop-shadow-sm">
             We sent a 6-digit code to {email || "your email"}
           </p>
         </div>
 
         <form
           onSubmit={handleSubmit}
-          className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-4"
+          className="bg-white rounded-xl shadow-lg border border-gray-100 p-6 space-y-4"
         >
           <div>
             <label className="text-sm font-medium text-gray-700">Verification code</label>
