@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="14" fill="#2563EB"/>
+
+  <!-- Graduation cap -->
+  <path d="M12 25L32 15L52 25L32 35L12 25Z" fill="white"/>
+
+  <!-- Cap base -->
+  <path d="M22 30V39C22 43 42 43 42 39V30L32 35L22 30Z" fill="white"/>
+
+  <!-- Tassel -->
+  <path
+    d="M47 27V38"
+    stroke="#FBBF24"
+    stroke-width="3"
+    stroke-linecap="round"
+  />
+
+  <circle cx="47" cy="40" r="2.5" fill="#FBBF24"/>
+</svg>
