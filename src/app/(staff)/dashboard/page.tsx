@@ -1,6 +1,8 @@
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getProfileOrRedirect } from "@/lib/get-profile";
 import StaffAttendanceCard from "@/components/StaffAttendanceCard";
+import StudentSearchBar from "@/components/StudentSearchBar";
 import StatCard from "@/components/StatCard";
 import {
   FeeCollectionChart,
@@ -27,7 +29,27 @@ import Link from "next/link";
 
 export default async function DashboardPage() {
   const profile = await getProfileOrRedirect();
+
+  /*
+   * =========================================================
+   * ROLE-BASED REDIRECT
+   * =========================================================
+   *
+   * This page is the Principal's dashboard. Other roles get
+   * their own dedicated dashboard route instead.
+   */
+
+  if (profile.role === "teacher" || profile.role === "hod") {
+    redirect("/teacher-dashboard");
+  }
+
+  if (profile.role === "bursar") {
+    redirect("/bursar-dashboard");
+  }
+
   const supabase = await createClient();
+
+
 
   /*
    * =========================================================
@@ -383,23 +405,27 @@ export default async function DashboardPage() {
           HEADER
       ====================================================== */}
 
-      <div>
-        <h1 className="text-xl font-bold text-gray-900">
-          Principal Dashboard
-        </h1>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+  <div>
+    <h1 className="text-xl font-bold text-gray-900">
+      Principal Dashboard
+    </h1>
 
-        <p className="text-sm text-gray-500">
-          {currentTerm
-            ? `${
-                (
-                  currentTerm.academic_year as unknown as {
-                    year: number;
-                  }
-                )?.year
-              } · Term ${currentTerm.term_number}`
-            : "No current term set"}
-        </p>
-      </div>
+    <p className="text-sm text-gray-500">
+      {currentTerm
+        ? `${
+            (
+              currentTerm.academic_year as unknown as {
+                year: number;
+              }
+            )?.year
+          } · Term ${currentTerm.term_number}`
+        : "No current term set"}
+    </p>
+  </div>
+
+  <StudentSearchBar />
+</div>
 
       {/* =====================================================
           MAIN SCHOOL STATS

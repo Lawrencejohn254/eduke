@@ -12,13 +12,23 @@ const PUBLIC_PATHS = [
   "/api/auth/register-staff",
 ];
 
+// Logged-in but not-yet-OTP-verified users must be allowed to hit these
+const OTP_EXEMPT_PATHS = [
+  "/verify-login",
+  "/api/auth/send-login-otp",
+  "/api/auth/verify-login-otp",
+];
+
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request });
 
+  const pathname = request.nextUrl.pathname;
+
   const isPublic = PUBLIC_PATHS.some(
-    (path) =>
-      request.nextUrl.pathname === path ||
-      request.nextUrl.pathname.startsWith(`${path}/`)
+    (path) => pathname === path || pathname.startsWith(`${path}/`)
+  );
+  const isOtpExempt = OTP_EXEMPT_PATHS.some(
+    (path) => pathname === path || pathname.startsWith(`${path}/`)
   );
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -26,7 +36,6 @@ export async function middleware(request: NextRequest) {
 
   if (!supabaseUrl || !supabaseAnonKey) {
     console.error("Missing Supabase env vars in middleware");
-    // Fail safe rather than crashing the request
     return isPublic
       ? response
       : NextResponse.redirect(new URL("/login", request.url));
@@ -60,11 +69,25 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(url);
     }
 
+    // OTP gate: logged in, but hasn't verified this login yet
+    if (user && !isPublic && !isOtpExempt) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("otp_verified")
+        .eq("id", user.id)
+        .single();
+
+      if (profile && profile.otp_verified === false) {
+        const url = request.nextUrl.clone();
+        url.pathname = "/verify-login";
+        url.searchParams.set("email", user.email ?? "");
+        return NextResponse.redirect(url);
+      }
+    }
+
     return response;
   } catch (err) {
     console.error("Middleware auth check failed:", err);
-    // Don't 500 the whole request — degrade to redirect-to-login for
-    // protected routes, pass through for public ones.
     return isPublic
       ? response
       : NextResponse.redirect(new URL("/login", request.url));
