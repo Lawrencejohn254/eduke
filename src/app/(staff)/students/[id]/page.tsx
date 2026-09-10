@@ -31,10 +31,9 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
   const klass = student.class as unknown as { name: string } | null;
   const stream = student.stream as unknown as { name: string } | null;
 
-  const { data: guardianLinks } = await supabase
-    .from("student_guardians")
-    .select("is_primary, fee_payer, guardian:guardians(id, full_name, phone_primary, phone_secondary, email, relationship, occupation)")
-    .eq("student_id", id);
+  // Note: guardian data is no longer fetched here. LinkGuardianInline owns
+  // its own fetch (list + add + unlink) so there's a single source of truth
+  // for this section instead of two renderers showing the same data.
 
   const { data: examResults } = await supabase
     .from("exam_results")
@@ -152,28 +151,6 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
 
       <div className="bg-white rounded-xl border border-gray-100 p-5">
         <p className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2"><Users size={16} /> Parent / Guardian</p>
-        {!guardianLinks || guardianLinks.length === 0 ? (
-          <p className="text-sm text-gray-400">No guardian linked yet.</p>
-        ) : (
-          <div className="space-y-2">
-            {guardianLinks.map((g, i) => {
-              const guardian = g.guardian as unknown as { id: string; full_name: string; phone_primary: string; email: string | null; relationship: string | null; occupation: string | null } | null;
-              if (!guardian) return null;
-              return (
-                <div key={i} className="flex items-center justify-between border border-gray-100 rounded-lg p-3 text-sm">
-                  <div>
-                    <p className="font-medium text-gray-900">{guardian.full_name} <span className="text-xs text-gray-400 font-normal">({guardian.relationship})</span></p>
-                    <p className="text-xs text-gray-500">{guardian.phone_primary} {guardian.email ? `· ${guardian.email}` : ""}</p>
-                  </div>
-                  <div className="flex gap-1.5">
-                    {g.is_primary && <span className="badge badge-blue">Primary</span>}
-                    {g.fee_payer && <span className="badge badge-green">Fee Payer</span>}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
         <LinkGuardianInline studentId={id} canEdit={canSeeFees} />
       </div>
 

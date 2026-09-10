@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Loader2, Search, CheckCircle2 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 type School = {
   id: string;
@@ -444,6 +445,17 @@ export default function StaffRegistrationForm() {
           : "Create Account"}
       </button>
 
+      <div className="text-center">
+        <p className="text-sm text-gray-500">Already have an account?</p>
+        <Link
+          href="/login"
+          className="mt-1 inline-block text-sm font-semibold text-eduke-green hover:underline"
+        >
+          Back to login
+        </Link>
+      </div>
+
     </form>
+
   );
 }

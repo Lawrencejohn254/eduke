@@ -8,6 +8,7 @@ import {
   UserCog,
   CircleUser,
   UserPlus,
+  UserCheck,
   BookOpen,
   Sparkles,
   ClipboardList,
@@ -67,6 +68,12 @@ const PRINCIPAL_NAV: NavItem[] = [
     label: "Staff Requests",
     href: "/staff/requests",
     icon: UserPlus,
+  },
+
+  {
+    label: "Parent Requests",
+    href: "/guardian-requests",
+    icon: UserCheck,
   },
 
   {

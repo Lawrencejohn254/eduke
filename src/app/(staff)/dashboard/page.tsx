@@ -13,6 +13,7 @@ import { formatKES } from "@/lib/format";
 import {
   Users,
   UserCog,
+  UserCheck,
   Wallet,
   AlertTriangle,
   Megaphone,
@@ -657,6 +658,14 @@ export default async function DashboardPage() {
         >
           <Megaphone size={16} />
           Send School Announcement
+        </Link>
+
+        <Link
+          href="/guardian-requests"
+          className="flex items-center gap-2 bg-white border border-gray-200 text-sm font-medium px-4 py-2.5 rounded-lg hover:border-eduke-green transition-colors"
+        >
+          <UserCheck size={16} />
+          Parent Account Requests
         </Link>
 
         <Link

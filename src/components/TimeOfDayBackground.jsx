@@ -4,17 +4,24 @@ import { useEffect, useState } from "react";
 
 /**
  * TimeOfDayBackground
- * Full-viewport gradient background that shifts by local time of day:
- *  - Morning (5:00–11:00): sunrise gradient, sun low on the horizon
- *  - Day     (11:00–17:00): bright sky gradient, sun high and centered
- *  - Night   (17:00–5:00): deep gradient, moon + stars
+ * Full-viewport gradient background with a sun/moon that travels a smooth
+ * arc from mid-left to mid-right:
+ *   - Sun is up from 06:00 -> 18:00, rising at the left, peaking at the top
+ *     center around noon, setting at the right.
+ *   - Moon takes over from 18:00 -> 06:00 (next day), tracing the same
+ *     left-to-right arc.
+ * Background gradient still shifts through 5 named phases (dawn/morning/
+ * day/dusk/night) for color, independent of the orb's continuous position.
  *
- * Usage: render it as an absolutely-positioned layer behind your login form.
+ * Usage: render as an absolutely-positioned layer behind your login form.
  *   <div className="relative min-h-screen">
  *     <TimeOfDayBackground />
  *     <div className="relative z-10"> ...your login form... </div>
  *   </div>
  */
+
+const SUNRISE_HOUR = 6;
+const SUNSET_HOUR = 18;
 
 function getPhase(hour) {
   if (hour >= 5 && hour < 8) return "dawn";
@@ -24,58 +31,110 @@ function getPhase(hour) {
   return "night";
 }
 
-const PHASES = {
-  dawn: {
-    gradient: "linear-gradient(160deg, #2b2149 0%, #6b3a5e 35%, #d97a5f 70%, #f4b57a 100%)",
-    orb: { top: "72%", color: "#ffd28a", glow: "#ffb86b", size: 90 },
-    body: "sun",
-  },
-  morning: {
-    gradient: "linear-gradient(160deg, #3a4a7a 0%, #6d7fb0 40%, #a9c3e0 75%, #f2e6c9 100%)",
-    orb: { top: "38%", color: "#fff3cf", glow: "#ffe9a8", size: 110 },
-    body: "sun",
-  },
-  day: {
-    gradient: "linear-gradient(160deg, #2f6fb0 0%, #5b9bd6 45%, #a7d3ee 80%, #e8f4fb 100%)",
-    orb: { top: "16%", color: "#fffdf5", glow: "#fff6c9", size: 130 },
-    body: "sun",
-  },
-  dusk: {
-    gradient: "linear-gradient(160deg, #1a1533 0%, #4a2f5e 40%, #a85a72 75%, #e8a06a 100%)",
-    orb: { top: "60%", color: "#ffb199", glow: "#ff8f7a", size: 100 },
-    body: "sun",
-  },
-  night: {
-    gradient: "linear-gradient(160deg, #0b0e23 0%, #171b3a 45%, #2a2758 80%, #3a2f5c 100%)",
-    orb: { top: "20%", color: "#f4f1e8", glow: "#cfd8ff", size: 80 },
-    body: "moon",
-  },
+const GRADIENTS = {
+  dawn: "linear-gradient(160deg, #2b2149 0%, #6b3a5e 35%, #d97a5f 70%, #f4b57a 100%)",
+  morning: "linear-gradient(160deg, #3a4a7a 0%, #6d7fb0 40%, #a9c3e0 75%, #f2e6c9 100%)",
+  day: "linear-gradient(160deg, #2f6fb0 0%, #5b9bd6 45%, #a7d3ee 80%, #e8f4fb 100%)",
+  dusk: "linear-gradient(160deg, #1a1533 0%, #4a2f5e 40%, #a85a72 75%, #e8a06a 100%)",
+  night: "linear-gradient(160deg, #0b0e23 0%, #171b3a 45%, #2a2758 80%, #3a2f5c 100%)",
 };
 
+const SUN_STYLE = {
+  color: "#ff9d3d",
+  glowCore: "#ff7a1a",
+  glowOuter: "rgba(255, 122, 26, 0.65)",
+  size: 110,
+  pulseDuration: "5s",
+  isCrescent: false,
+};
+const MOON_STYLE = {
+  color: "#f4f1e8",
+  glowCore: "#cfd8ff",
+  glowOuter: "rgba(180, 195, 255, 0.4)",
+  size: 78,
+  pulseDuration: "7s",
+  isCrescent: true,
+  // Mask cuts a transparent circular "bite" out of the moon disc, offset
+  // toward the upper-right, revealing the true sky gradient behind it
+  // (rather than painting a fixed color) so it looks correct at any hour.
+  maskImage:
+    "radial-gradient(circle at 68% 32%, transparent 0%, transparent 46%, black 48%)",
+};
+
+const LEFT_PCT = 8;
+const RIGHT_PCT = 92;
+const BASELINE_PCT = 88; // vertical position at rise/set (near horizon)
+const APEX_LIFT_PCT = 68; // how high the arc climbs above the baseline at its peak
+
+/**
+ * Given decimal hours (e.g. 14.5 = 2:30pm), return whether the sun or moon
+ * is currently up, plus its position as percentages along a left-to-right
+ * arc (0 = just rising on the left, 1 = just setting on the right).
+ */
+function getOrbState(decimalHours) {
+  let isSun;
+  let fraction;
+
+  if (decimalHours >= SUNRISE_HOUR && decimalHours < SUNSET_HOUR) {
+    isSun = true;
+    fraction = (decimalHours - SUNRISE_HOUR) / (SUNSET_HOUR - SUNRISE_HOUR);
+  } else {
+    isSun = false;
+    if (decimalHours >= SUNSET_HOUR) {
+      fraction = (decimalHours - SUNSET_HOUR) / (24 - SUNSET_HOUR + SUNRISE_HOUR);
+    } else {
+      fraction = (decimalHours + (24 - SUNSET_HOUR)) / (24 - SUNSET_HOUR + SUNRISE_HOUR);
+    }
+  }
+
+  fraction = Math.min(1, Math.max(0, fraction));
+
+  const xPct = LEFT_PCT + (RIGHT_PCT - LEFT_PCT) * fraction;
+  // sin(0) = 0 at rise/set, peaks at the midpoint -> arc shape
+  const arcHeight = Math.sin(fraction * Math.PI);
+  const yPct = BASELINE_PCT - APEX_LIFT_PCT * arcHeight;
+  // fade in/out near the horizon edges so it doesn't look like it pops in
+  const opacity = Math.min(1, 0.25 + arcHeight * 1.1);
+
+  return { isSun, xPct, yPct, opacity };
+}
+
 const STAR_POSITIONS = [
-  { top: "12%", left: "18%", size: 2, delay: "0s" },
-  { top: "22%", left: "72%", size: 2, delay: "0.4s" },
-  { top: "8%", left: "45%", size: 1.5, delay: "0.8s" },
-  { top: "35%", left: "85%", size: 1.5, delay: "1.2s" },
-  { top: "48%", left: "10%", size: 2, delay: "1.6s" },
-  { top: "30%", left: "30%", size: 1.5, delay: "2s" },
-  { top: "55%", left: "60%", size: 2, delay: "0.6s" },
-  { top: "15%", left: "60%", size: 1, delay: "1s" },
+  { top: "10%", left: "18%", size: 2, delay: "0s" },
+  { top: "20%", left: "75%", size: 2, delay: "0.4s" },
+  { top: "6%", left: "45%", size: 1.5, delay: "0.8s" },
+  { top: "30%", left: "88%", size: 1.5, delay: "1.2s" },
+  { top: "42%", left: "8%", size: 2, delay: "1.6s" },
+  { top: "26%", left: "30%", size: 1.5, delay: "2s" },
+  { top: "48%", left: "62%", size: 2, delay: "0.6s" },
+  { top: "14%", left: "58%", size: 1, delay: "1s" },
 ];
 
+function getDecimalHours(date) {
+  return date.getHours() + date.getMinutes() / 60 + date.getSeconds() / 3600;
+}
+
 export default function TimeOfDayBackground() {
-  // Default to "day" so server and client render identically on first paint.
-  // The real, browser-local phase is computed client-side in the effect below.
+  // Defaults chosen to match on server and client (avoids hydration mismatch);
+  // the real, browser-local values are computed client-side in the effect below.
   const [phase, setPhase] = useState("day");
+  const [orb, setOrb] = useState({ isSun: true, xPct: 50, yPct: 20, opacity: 1 });
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    const tick = () => setPhase(getPhase(new Date().getHours()));
+    const tick = () => {
+      const now = new Date();
+      setPhase(getPhase(now.getHours()));
+      setOrb(getOrbState(getDecimalHours(now)));
+    };
     tick();
-    const id = setInterval(tick, 60 * 1000);
+    setMounted(true);
+    // Updating every 30s keeps the arc creeping smoothly without excessive re-renders.
+    const id = setInterval(tick, 30 * 1000);
     return () => clearInterval(id);
   }, []);
 
-  const config = PHASES[phase];
+  const orbStyle = orb.isSun ? SUN_STYLE : MOON_STYLE;
 
   return (
     <div
@@ -84,12 +143,12 @@ export default function TimeOfDayBackground() {
         position: "absolute",
         inset: 0,
         overflow: "hidden",
-        background: config.gradient,
+        background: GRADIENTS[phase],
         transition: "background 3s ease-in-out",
         zIndex: 0,
       }}
     >
-      {config.body === "moon" &&
+      {!orb.isSun &&
         STAR_POSITIONS.map((s, i) => (
           <div
             key={i}
@@ -107,18 +166,54 @@ export default function TimeOfDayBackground() {
           />
         ))}
 
+      {/* Outer halo: a soft, larger radial glow that pulses gently */}
       <div
         style={{
           position: "absolute",
-          top: config.orb.top,
-          left: "50%",
+          top: `${orb.yPct}%`,
+          left: `${orb.xPct}%`,
           transform: "translate(-50%, -50%)",
-          width: config.orb.size,
-          height: config.orb.size,
+          width: orbStyle.size * 3.2,
+          height: orbStyle.size * 3.2,
           borderRadius: "50%",
-          background: config.orb.color,
-          boxShadow: `0 0 ${config.orb.size * 0.9}px ${config.orb.size * 0.35}px ${config.orb.glow}`,
-          transition: "top 3s ease-in-out, background 3s ease-in-out, box-shadow 3s ease-in-out",
+          background: `radial-gradient(circle, ${orbStyle.glowOuter} 0%, transparent 70%)`,
+          opacity: orb.opacity,
+          animation: `pulse-glow ${orbStyle.pulseDuration} ease-in-out infinite`,
+          transition: mounted
+            ? "left 30s linear, top 30s linear, opacity 3s ease-in-out"
+            : "none",
+          pointerEvents: "none",
+        }}
+      />
+
+      {/* Orb body with a tight bright core glow (sun: full circle, moon: crescent via mask) */}
+      <div
+        style={{
+          position: "absolute",
+          top: `${orb.yPct}%`,
+          left: `${orb.xPct}%`,
+          transform: "translate(-50%, -50%)",
+          width: orbStyle.size,
+          height: orbStyle.size,
+          borderRadius: "50%",
+          background: orbStyle.isCrescent
+            ? `radial-gradient(circle at 35% 35%, #ffffff 0%, ${orbStyle.color} 55%, ${orbStyle.glowCore} 100%)`
+            : `radial-gradient(circle at 40% 35%, #ffe6b8 0%, ${orbStyle.color} 45%, ${orbStyle.glowCore} 100%)`,
+          opacity: orb.opacity,
+          // Full box-shadow glow only for the sun; a crescent moon uses a
+          // softer, contained shadow so light doesn't leak in a full circle
+          // behind the masked-away part of the disc.
+          boxShadow: orbStyle.isCrescent
+            ? `0 0 ${orbStyle.size * 0.25}px ${orbStyle.size * 0.05}px ${orbStyle.glowCore}`
+            : `0 0 ${orbStyle.size * 0.6}px ${orbStyle.size * 0.2}px ${orbStyle.glowCore}`,
+          WebkitMaskImage: orbStyle.isCrescent ? orbStyle.maskImage : "none",
+          maskImage: orbStyle.isCrescent ? orbStyle.maskImage : "none",
+          animation: `pulse-core ${orbStyle.pulseDuration} ease-in-out infinite`,
+          // Linear + duration matched to the tick interval so motion reads as
+          // one continuous creep across the sky rather than periodic jumps.
+          transition: mounted
+            ? "left 30s linear, top 30s linear, opacity 3s ease-in-out, background 3s ease-in-out"
+            : "none",
         }}
       />
 
@@ -126,6 +221,14 @@ export default function TimeOfDayBackground() {
         @keyframes twinkle {
           0%, 100% { opacity: 0.3; }
           50% { opacity: 1; }
+        }
+        @keyframes pulse-glow {
+          0%, 100% { transform: translate(-50%, -50%) scale(1); }
+          50% { transform: translate(-50%, -50%) scale(1.15); }
+        }
+        @keyframes pulse-core {
+          0%, 100% { filter: brightness(1); }
+          50% { filter: brightness(1.12); }
         }
         @media (prefers-reduced-motion: reduce) {
           * { animation: none !important; transition: none !important; }

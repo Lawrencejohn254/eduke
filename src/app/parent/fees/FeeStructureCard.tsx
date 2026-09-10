@@ -59,26 +59,52 @@ export default function FeeStructureCard({
           </button>
         </div>
       </div>
-      <div className="eduke-table-wrap">
-        <table>
+
+      <div className="border border-gray-100 rounded-lg overflow-hidden">
+        <table className="w-full border-collapse">
           <thead>
-            <tr className="text-left text-xs text-gray-500 border-b border-gray-100">
-              <th className="p-2">Category</th>
-              <th className="p-2">Amount</th>
+            <tr className="bg-gray-50 border-b border-gray-100">
+              <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide p-3">
+                Category
+              </th>
+              <th className="text-right text-xs font-semibold text-gray-500 uppercase tracking-wide p-3">
+                Amount
+              </th>
             </tr>
           </thead>
+
           <tbody>
             {rows.map((r, i) => (
-              <tr key={i} className="border-b border-gray-50">
-                <td className="p-2 text-gray-700">{r.category}{!r.mandatory ? " (optional)" : ""}</td>
-                <td className="p-2 font-medium">{formatKES(r.amount)}</td>
+              <tr
+                key={i}
+                className={`border-b border-gray-100 last:border-b-0 ${
+                  i % 2 === 1 ? "bg-gray-50" : ""
+                }`}
+              >
+                <td className="p-3 text-sm text-gray-700">
+                  {r.category}
+                  {!r.mandatory && (
+                    <span className="ml-1.5 text-[10px] font-medium text-gray-400 uppercase">
+                      Optional
+                    </span>
+                  )}
+                  {r.description && (
+                    <p className="text-xs text-gray-400 mt-0.5">{r.description}</p>
+                  )}
+                </td>
+                <td className="p-3 text-sm font-medium text-gray-900 text-right whitespace-nowrap">
+                  {formatKES(r.amount)}
+                </td>
               </tr>
             ))}
           </tbody>
+
           <tfoot>
-            <tr>
-              <td className="p-2 font-semibold text-gray-900">TOTAL</td>
-              <td className="p-2 font-semibold text-gray-900">{formatKES(total)}</td>
+            <tr className="bg-gray-50 border-t-2 border-gray-200">
+              <td className="p-3 text-sm font-bold text-gray-900">TOTAL</td>
+              <td className="p-3 text-sm font-bold text-gray-900 text-right whitespace-nowrap">
+                {formatKES(total)}
+              </td>
             </tr>
           </tfoot>
         </table>

@@ -10,6 +10,22 @@ const PUBLIC_PATHS = [
   "/api/pesapal/ipn",
   "/api/public/schools/search",
   "/api/auth/register-staff",
+  // Parent sign-up + guardian-linking flow. These must stay public because:
+  //  - /create-parent-account is hit before any session exists.
+  //  - /link-child/* is hit right after signUp(), when the parent DOES have
+  //    a session but profiles.otp_verified is still false (that flag is for
+  //    the staff login-time 2FA flow, purpose='login' — the parent-linking
+  //    OTP is a separate purpose='parent_link' flow with its own gate inside
+  //    parent-verify-otp). Without this exemption the OTP gate below would
+  //    redirect a mid-signup parent to /verify-login, which is the wrong page.
+  "/create-parent-account",
+  "/link-child",
+  // Password reset: /forgot-password is hit with no session at all.
+  // /reset-password is hit with only a temporary PASSWORD_RECOVERY session
+  // (no profile-based otp_verified flag applies to that session type), so
+  // it must stay public too or the OTP gate below would misroute it.
+  "/forgot-password",
+  "/reset-password",
 ];
 
 // Logged-in but not-yet-OTP-verified users must be allowed to hit these

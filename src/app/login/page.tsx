@@ -25,6 +25,9 @@ export default function LoginPage() {
   const [error, setError] =
     useState<string | null>(null);
 
+  const [showLinkChildHelp, setShowLinkChildHelp] =
+    useState(false);
+
   async function handleSubmit(
     e: React.FormEvent
   ) {
@@ -32,6 +35,7 @@ export default function LoginPage() {
 
     setLoading(true);
     setError(null);
+    setShowLinkChildHelp(false);
 
     try {
       const supabase = createClient();
@@ -95,10 +99,13 @@ export default function LoginPage() {
        */
 
       if (profileError || !profile) {
-        await supabase.auth.signOut();
-
+        // Note: intentionally NOT signing out here. A parent who signed up
+        // but never finished phone verification will have an auth session
+        // with no profiles row yet — signing them out would strand them,
+        // since /link-child requires an active session to resume.
+        setShowLinkChildHelp(true);
         throw new Error(
-          "Your user profile could not be found."
+          "Your account isn't fully set up yet."
         );
       }
 
@@ -113,6 +120,12 @@ export default function LoginPage() {
         "pending"
       ) {
         await supabase.auth.signOut();
+
+        if (profile.role === "parent") {
+          throw new Error(
+            "Your account isn't linked to a student yet. Please finish signing up to continue."
+          );
+        }
 
         throw new Error(
           "Your account is pending approval from your school administrator."
@@ -337,9 +350,18 @@ export default function LoginPage() {
 
           <div>
 
-            <label className="text-sm font-medium text-gray-700">
-              Password
-            </label>
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-medium text-gray-700">
+                Password
+              </label>
+
+              <Link
+                href="/forgot-password"
+                className="text-xs font-medium text-eduke-green hover:underline"
+              >
+                Forgot password?
+              </Link>
+            </div>
 
             <input
               type="password"
@@ -364,6 +386,15 @@ export default function LoginPage() {
             <div className="rounded-lg bg-red-50 border border-red-100 px-3 py-2.5 text-sm text-red-600">
 
               {error}
+
+              {showLinkChildHelp && (
+                <Link
+                  href="/link-child"
+                  className="mt-2 block font-semibold underline"
+                >
+                  Continue linking your child &rarr;
+                </Link>
+              )}
 
             </div>
 
@@ -411,6 +442,22 @@ export default function LoginPage() {
               className="mt-1 inline-block text-sm font-semibold text-white hover:underline drop-shadow-sm"
             >
               Create Staff Account
+            </Link>
+
+          </div>
+
+
+          <div className="border-t border-white/20 pt-4">
+
+            <p className="text-sm text-white/80 drop-shadow-sm">
+              Are you a parent?
+            </p>
+
+            <Link
+              href="/create-parent-account"
+              className="mt-1 inline-block text-sm font-semibold text-white hover:underline drop-shadow-sm"
+            >
+              Create Parent Account
             </Link>
 
           </div>

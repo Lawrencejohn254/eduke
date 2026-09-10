@@ -1,10 +1,12 @@
 "use client";
 
-import { useState, Suspense } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { GraduationCap, Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import TimeOfDayBackground from "@/components/TimeOfDayBackground";
+
+const RESEND_COOLDOWN_SECONDS = 30;
 
 function VerifyLoginForm() {
   const router = useRouter();
@@ -14,6 +16,31 @@ function VerifyLoginForm() {
   const [otp, setOtp] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [resending, setResending] = useState(false);
+  const [resendMessage, setResendMessage] = useState<string | null>(null);
+  const [cooldown, setCooldown] = useState(0);
+  const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (cooldownRef.current) clearInterval(cooldownRef.current);
+    };
+  }, []);
+
+  function startCooldown(seconds: number) {
+    setCooldown(seconds);
+    if (cooldownRef.current) clearInterval(cooldownRef.current);
+    cooldownRef.current = setInterval(() => {
+      setCooldown((prev) => {
+        if (prev <= 1) {
+          if (cooldownRef.current) clearInterval(cooldownRef.current);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -43,10 +70,64 @@ function VerifyLoginForm() {
       }
 
       router.push(result.redirectTo || "/dashboard");
-    router.refresh();
+      router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
       setLoading(false);
+    }
+  }
+
+  async function handleResend() {
+    setResending(true);
+    setError(null);
+    setResendMessage(null);
+
+    try {
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        throw new Error("Your session expired. Please log in again.");
+      }
+
+      // First name is used server-side purely for email personalization —
+      // fetch it fresh rather than assuming it's available client-side here.
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("first_name")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      const response = await fetch("/api/auth/send-login-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: user.id,
+          email: user.email ?? email,
+          firstName: profile?.first_name ?? "",
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        // Server-side rate limiting responds here (e.g. 429). Surface
+        // whatever cooldown it reports rather than guessing client-side.
+        if (response.status === 429 && result.retryAfterSeconds) {
+          startCooldown(result.retryAfterSeconds);
+        }
+        throw new Error(result.error ?? "Could not resend the code.");
+      }
+
+      setOtp("");
+      setResendMessage("A new code has been sent.");
+      startCooldown(RESEND_COOLDOWN_SECONDS);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not resend the code.");
+    } finally {
+      setResending(false);
     }
   }
 
@@ -90,6 +171,12 @@ function VerifyLoginForm() {
             </div>
           )}
 
+          {resendMessage && !error && (
+            <div className="rounded-lg bg-green-50 border border-green-100 px-3 py-2.5 text-sm text-green-700">
+              {resendMessage}
+            </div>
+          )}
+
           <button
             type="submit"
             disabled={loading || otp.length !== 6}
@@ -97,6 +184,20 @@ function VerifyLoginForm() {
           >
             {loading && <Loader2 size={16} className="animate-spin" />}
             {loading ? "Verifying..." : "Verify & continue"}
+          </button>
+
+          <button
+            type="button"
+            onClick={handleResend}
+            disabled={resending || cooldown > 0}
+            className="w-full text-sm text-eduke-green hover:underline disabled:opacity-60 disabled:no-underline flex items-center justify-center gap-1.5"
+          >
+            {resending && <Loader2 size={13} className="animate-spin" />}
+            {resending
+              ? "Sending..."
+              : cooldown > 0
+              ? `Resend code in ${cooldown}s`
+              : "Resend code"}
           </button>
         </form>
       </div>
