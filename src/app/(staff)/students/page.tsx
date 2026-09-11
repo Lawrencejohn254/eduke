@@ -21,7 +21,11 @@ export default async function StudentsPage() {
     .select("id, name, class:classes(id, name)")
     .order("name");
 
-  const canAdd = ["principal", "deputy_principal", "super_admin"].includes(profile.role);
+  const isAdminTier = ["principal", "deputy_principal", "super_admin"].includes(profile.role);
+  const isTeacherEnrollmentOpen =
+    profile.role === "teacher" && (profile.school?.student_enrollment_enabled ?? false);
+
+  const canAdd = isAdminTier || isTeacherEnrollmentOpen;
 
   return (
     <div className="space-y-4">

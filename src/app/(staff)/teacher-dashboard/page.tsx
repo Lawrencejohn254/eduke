@@ -6,8 +6,14 @@ import StaffAttendanceCard from "@/components/StaffAttendanceCard";
 import Link from "next/link";
 import { EmptyState } from "@/components/Loaders";
 
-export default async function TeacherDashboardPage() {
+export default async function TeacherDashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
   const profile = await getProfileOrRedirect();
+  const resolvedSearchParams = await searchParams;
+  const enrollmentClosed = resolvedSearchParams?.enrollment === "closed";
   const supabase = await createClient();
 
   const staffId = profile.staff_id;
@@ -203,6 +209,18 @@ const { data: todayStaffAttendance } = staffId
           Welcome back, {profile.first_name}.
         </p>
       </div>
+
+
+      {/* ENROLLMENT CLOSED NOTICE */}
+
+      {enrollmentClosed && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-xl px-4 py-3">
+          <p className="font-semibold">Student enrollment is currently closed.</p>
+          <p className="mt-1">
+            Please contact your school administrator if you need access to student enrollment.
+          </p>
+        </div>
+      )}
 
 
       {/* AI BANNER */}

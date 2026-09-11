@@ -12,7 +12,10 @@ export default async function StaffLayout({ children }: { children: React.ReactN
 
   return (
     <div className="flex min-h-screen">
-      <Sidebar role={profile.role} />
+      <Sidebar
+        role={profile.role}
+        studentEnrollmentEnabled={profile.school?.student_enrollment_enabled ?? false}
+      />
       <div className="flex-1 flex flex-col min-w-0">
         <TopBar
   role={profile.role}

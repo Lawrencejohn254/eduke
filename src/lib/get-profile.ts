@@ -24,6 +24,7 @@ export type Profile = {
 
   school?: {
     name: string;
+    student_enrollment_enabled: boolean;
   } | null;
 };
 
@@ -41,7 +42,8 @@ export async function getProfileOrRedirect(): Promise<Profile> {
   .select(`
     *,
     school:schools (
-      name
+      name,
+      student_enrollment_enabled
     )
   `)
   .eq("id", user.id)

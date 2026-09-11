@@ -5,6 +5,7 @@ import { formatKES, formatDateDMY } from "@/lib/format";
 import { Wallet, TrendingUp, AlertTriangle, Receipt } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import StaffAttendanceCard from "@/components/StaffAttendanceCard";
 
 export default async function BursarDashboardPage() {
   const profile = await getProfileOrRedirect();
@@ -13,6 +14,51 @@ export default async function BursarDashboardPage() {
   }
 
   const supabase = await createClient();
+
+  const { data: school } = await supabase
+    .from("schools")
+    .select("timezone")
+    .eq("id", profile.school_id)
+    .maybeSingle();
+
+  const timezone = school?.timezone ?? "Africa/Nairobi";
+
+  const attendanceToday = new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+
+  const { data: myStaffRecord } = await supabase
+    .from("staff")
+    .select("id")
+    .eq("profile_id", profile.id)
+    .eq("school_id", profile.school_id)
+    .eq("status", "Active")
+    .maybeSingle();
+
+  const { data: myTodayAttendance } = myStaffRecord
+    ? await supabase
+        .from("staff_attendance")
+        .select(`
+          id,
+          school_id,
+          staff_id,
+          attendance_date,
+          sign_in_at,
+          sign_out_at,
+          sign_in_method,
+          sign_out_method,
+          status,
+          minutes_late,
+          created_at,
+          updated_at
+        `)
+        .eq("staff_id", myStaffRecord.id)
+        .eq("attendance_date", attendanceToday)
+        .maybeSingle()
+    : { data: null };
 
   const { data: currentTerm } = await supabase
     .from("terms")
@@ -58,6 +104,10 @@ export default async function BursarDashboardPage() {
         <StatCard label="Collected This Week" value={formatKES(weekTotal)} icon={TrendingUp} />
         <StatCard label="Collected Last 30 Days" value={formatKES(monthTotal)} icon={TrendingUp} />
         <StatCard label="Collected This Term" value={formatKES(termTotal)} icon={Receipt} />
+      </div>
+
+      <div className="lg:max-w-sm">
+        <StaffAttendanceCard initialAttendance={myTodayAttendance} timezone={timezone} />
       </div>
 
       {pending.length > 0 && (

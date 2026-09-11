@@ -110,6 +110,34 @@ export default async function DashboardPage() {
 
   /*
    * =========================================================
+   * MY (PERSONAL) ATTENDANCE
+   * =========================================================
+   */
+
+  const { data: myTodayAttendance } = currentStaff
+    ? await supabase
+        .from("staff_attendance")
+        .select(`
+          id,
+          school_id,
+          staff_id,
+          attendance_date,
+          sign_in_at,
+          sign_out_at,
+          sign_in_method,
+          sign_out_method,
+          status,
+          minutes_late,
+          created_at,
+          updated_at
+        `)
+        .eq("staff_id", currentStaff.id)
+        .eq("attendance_date", today)
+        .maybeSingle()
+    : { data: null };
+
+  /*
+   * =========================================================
    * BASIC COUNTS
    * =========================================================
    */
@@ -465,7 +493,20 @@ export default async function DashboardPage() {
           STAFF ATTENDANCE
       ====================================================== */}
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100">
+      <div className="grid lg:grid-cols-3 gap-4">
+
+        {/* MY ATTENDANCE */}
+
+        <div className="lg:col-span-1">
+          <StaffAttendanceCard
+            initialAttendance={myTodayAttendance}
+            timezone={timezone}
+          />
+        </div>
+
+        {/* SCHOOL-WIDE SUMMARY */}
+
+        <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-100">
 
         {/* CARD HEADER */}
 
@@ -580,6 +621,8 @@ export default async function DashboardPage() {
             </p>
 
           </div>
+
+        </div>
 
         </div>
 

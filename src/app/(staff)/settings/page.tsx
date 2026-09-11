@@ -7,6 +7,7 @@ import ClassPromotionSettings from "./ClassPromotionSettings";
 import AcademicSetup from "./AcademicSetup";
 import AcademicYearManager from "@/components/AcademicYearManager";
 import EditSchoolInfo from "./EditSchoolInfo";
+import StudentEnrollmentSettings from "./StudentEnrollmentSettings";
 
 export default async function SettingsPage() {
   const profile = await getProfileOrRedirect();
@@ -259,6 +260,21 @@ export default async function SettingsPage() {
         </div>
 
       </div>
+
+
+      {/* =========================
+          STUDENT ENROLLMENT
+      ========================= */}
+
+      <StudentEnrollmentSettings
+        schoolId={profile.school_id}
+        initialEnabled={school?.student_enrollment_enabled ?? false}
+        canManage={[
+          "principal",
+          "deputy_principal",
+          "super_admin",
+        ].includes(profile.role)}
+      />
 
 
       {/* =========================

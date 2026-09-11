@@ -6,6 +6,12 @@ export default async function AttendancePage() {
   const profile = await getProfileOrRedirect();
   const supabase = await createClient();
 
+  const { data: currentTerm } = await supabase
+    .from("terms")
+    .select("id")
+    .eq("is_current", true)
+    .maybeSingle();
+
   const { data: assignments } = profile.staff_id
     ? await supabase
         .from("teacher_subjects")
@@ -23,5 +29,11 @@ export default async function AttendancePage() {
     ).values()
   );
 
-  return <AttendanceClient streams={streams} staffId={profile.staff_id} />;
+  return (
+    <AttendanceClient
+      streams={streams}
+      staffId={profile.staff_id}
+      termId={currentTerm?.id ?? null}
+    />
+  );
 }

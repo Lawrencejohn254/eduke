@@ -9,7 +9,21 @@ type StreamRow = { id: string; name: string; class: { id: string; name: string }
 type Student = { id: string; first_name: string; last_name: string; admission_number: string };
 type AttStatus = "Present" | "Absent" | "Late" | "Excused";
 
-export default function AttendanceClient({ streams, staffId }: { streams: StreamRow[]; staffId: string | null }) {
+function isWeekend(dateStr: string) {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const day = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+  return day === 0 || day === 6;
+}
+
+export default function AttendanceClient({
+  streams,
+  staffId,
+  termId,
+}: {
+  streams: StreamRow[];
+  staffId: string | null;
+  termId: string | null;
+}) {
   const [streamId, setStreamId] = useState(streams[0]?.id ?? "");
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [students, setStudents] = useState<Student[]>([]);
@@ -18,6 +32,7 @@ export default function AttendanceClient({ streams, staffId }: { streams: Stream
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState<string | null>(null);
   const [notifyAbsentees, setNotifyAbsentees] = useState(true);
+  const [dateError, setDateError] = useState<string | null>(null);
 
   const loadStudents = useCallback(async () => {
     if (!streamId) return;
@@ -63,6 +78,10 @@ export default function AttendanceClient({ streams, staffId }: { streams: Stream
   }
 
   async function handleSave() {
+    if (isWeekend(date)) {
+      setSaved("Error: attendance cannot be marked for a weekend.");
+      return;
+    }
     setSaving(true);
     setSaved(null);
     const supabase = createClient();
@@ -71,6 +90,7 @@ export default function AttendanceClient({ streams, staffId }: { streams: Stream
       date,
       status: statuses[s.id] ?? "Present",
       recorded_by: staffId,
+      term_id: termId,
     }));
     const { error } = await supabase.from("attendance").upsert(rows, { onConflict: "student_id,date" });
 
@@ -110,7 +130,21 @@ export default function AttendanceClient({ streams, staffId }: { streams: Stream
         </div>
         <div>
           <label className="text-sm font-medium text-gray-700">Date</label>
-          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="mt-1 rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+          <input
+            type="date"
+            value={date}
+            onChange={(e) => {
+              const value = e.target.value;
+              if (value && isWeekend(value)) {
+                setDateError("Attendance can only be marked for weekdays (Mon–Fri).");
+                return;
+              }
+              setDateError(null);
+              setDate(value);
+            }}
+            className="mt-1 rounded-lg border border-gray-300 px-3 py-2 text-sm"
+          />
+          {dateError && <p className="text-xs text-red-600 mt-1">{dateError}</p>}
         </div>
         <button onClick={markAllPresent} className="text-sm font-medium text-eduke-green border border-eduke-green rounded-lg px-3 py-2 hover:bg-eduke-green/5">
           Mark All Present

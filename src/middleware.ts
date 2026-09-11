@@ -101,6 +101,54 @@ export async function middleware(request: NextRequest) {
       }
     }
 
+        // OTP gate: logged in, but hasn't verified this login yet
+    if (user && !isPublic && !isOtpExempt) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("otp_verified")
+        .eq("id", user.id)
+        .single();
+
+      if (profile && profile.otp_verified === false) {
+        const url = request.nextUrl.clone();
+        url.pathname = "/verify-login";
+        url.searchParams.set("email", user.email ?? "");
+        return NextResponse.redirect(url);
+      }
+    }
+
+    // ── Student enrollment gate ──────────────────────────────────────────
+    // Teachers may only access /students while their school's enrollment
+    // workflow is open (schools.student_enrollment_enabled). This is a UX
+    // redirect only — the authoritative check is Supabase RLS
+    // (my_school_enrollment_enabled()), which blocks writes regardless of
+    // whether this middleware runs. Principals/admins are never restricted
+    // here; they always have /students access.
+    const isStudentsRoute =
+      pathname === "/students" || pathname.startsWith("/students/");
+
+    if (user && isStudentsRoute) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .single();
+
+      if (profile?.role === "teacher") {
+        const { data: enrollmentEnabled, error: enrollmentError } =
+          await supabase.rpc("my_school_enrollment_enabled");
+
+        // Fail closed: if the check itself errors, treat enrollment as
+        // closed rather than letting a teacher through on an RPC failure.
+        if (enrollmentError || !enrollmentEnabled) {
+          const url = request.nextUrl.clone();
+          url.pathname = "/teacher-dashboard";
+          url.searchParams.set("enrollment", "closed");
+          return NextResponse.redirect(url);
+        }
+      }
+    }
+
     return response;
   } catch (err) {
     console.error("Middleware auth check failed:", err);

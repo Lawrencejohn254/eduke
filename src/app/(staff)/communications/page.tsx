@@ -20,9 +20,15 @@ export default async function CommunicationsPage() {
     .eq("status", "Active")
     .order("first_name");
 
+  const { data: templates } = await supabase
+  .from("communication_templates")
+  .select("id, name, communication_type, body, created_at")
+  .eq("school_id", profile.school_id)
+  .order("name");
+
   const { data: history } = await supabase
     .from("notifications")
-    .select("id, subject, message, target_type, recipient_count, status, sent_at, created_at")
+    .select("id, subject, message, target_type, communication_type, recipient_count, status, sent_at, scheduled_for, created_at")
     .eq("school_id", profile.school_id)
     .order("created_at", { ascending: false })
     .limit(30);
@@ -39,11 +45,13 @@ export default async function CommunicationsPage() {
       </div>
 
       <CommunicationsClient
-        classes={classes ?? []}
-        streams={(streams ?? []) as never}
-        students={students ?? []}
-        history={history ?? []}
-      />
+      classes={classes ?? []}
+      streams={(streams ?? []) as never}
+      students={students ?? []}
+      history={history ?? []}
+      templates={templates ?? []}
+      canManageTemplates={["principal", "deputy_principal", "super_admin"].includes(profile.role)}
+    />
     </div>
   );
 }
