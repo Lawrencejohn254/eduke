@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { Pencil, X, Loader2, Eye, UserPlus, Trash2, AlertTriangle } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
@@ -74,6 +75,10 @@ export default function StudentRow({
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const router = useRouter();
+
+  // Portals need document.body, which only exists client-side after mount.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -213,10 +218,8 @@ export default function StudentRow({
         </td>
       </tr>
 
-      {open && (
-        <tr>
-          <td colSpan={7} className="p-0">
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      {open && mounted && createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
               <div className="bg-white rounded-xl w-full max-w-md p-5 max-h-[90vh] overflow-y-auto">
                 <div className="flex justify-between items-center mb-4">
                   <h2 className="font-semibold text-gray-900">Edit Student</h2>
@@ -313,15 +316,12 @@ export default function StudentRow({
                   </button>
                 </form>
               </div>
-                        </div>
-          </td>
-        </tr>
+                    </div>,
+        document.body
       )}
 
-      {deleteOpen && (
-        <tr>
-          <td colSpan={7} className="p-0">
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      {deleteOpen && mounted && createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
               <div className="bg-white rounded-xl w-full max-w-sm p-5">
                 <div className="flex items-start gap-3 mb-4">
                   <div className="w-9 h-9 rounded-full bg-red-50 flex items-center justify-center shrink-0">
@@ -365,9 +365,8 @@ export default function StudentRow({
                   </button>
                 </div>
               </div>
-            </div>
-          </td>
-        </tr>
+        </div>,
+        document.body
       )}
     </>
   );
