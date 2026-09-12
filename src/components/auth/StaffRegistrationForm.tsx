@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, Search, CheckCircle2 } from "lucide-react";
+import { Loader2, Search, CheckCircle2, XCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -39,6 +39,7 @@ export default function StaffRegistrationForm() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
 
   const [gender, setGender] = useState("");
   const [role, setRole] = useState("teacher");
@@ -55,6 +56,9 @@ export default function StaffRegistrationForm() {
   const [saving, setSaving] = useState(false);
 
   const [error, setError] = useState<string | null>(null);
+
+  const passwordsMatch = confirmPassword.length > 0 && password === confirmPassword;
+  const passwordsMismatch = confirmPassword.length > 0 && password !== confirmPassword;
 
   useEffect(() => {
     if (selectedSchool) return;
@@ -103,6 +107,11 @@ export default function StaffRegistrationForm() {
 
     if (password.length < 6) {
       setError("Password must contain at least 6 characters.");
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setError("Passwords do not match.");
       return;
     }
 
@@ -228,6 +237,35 @@ export default function StaffRegistrationForm() {
             }
             className="rounded-lg border border-gray-300 px-3 py-2.5 text-sm"
           />
+
+          <div>
+            <input
+              required
+              type="password"
+              placeholder="Confirm Password"
+              value={confirmPassword}
+              onChange={(e) =>
+                setConfirmPassword(e.target.value)
+              }
+              className={`w-full rounded-lg border px-3 py-2.5 text-sm ${
+                passwordsMismatch
+                  ? "border-red-400 focus:outline-red-400"
+                  : passwordsMatch
+                  ? "border-eduke-green focus:outline-eduke-green"
+                  : "border-gray-300"
+              }`}
+            />
+            {passwordsMismatch && (
+              <p className="mt-1 text-xs text-red-600 flex items-center gap-1">
+                <XCircle size={13} /> Passwords do not match
+              </p>
+            )}
+            {passwordsMatch && (
+              <p className="mt-1 text-xs text-eduke-green flex items-center gap-1">
+                <CheckCircle2 size={13} /> Passwords match
+              </p>
+            )}
+          </div>
 
         </div>
       </section>

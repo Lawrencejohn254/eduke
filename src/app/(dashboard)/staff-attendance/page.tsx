@@ -9,6 +9,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import StaffAttendanceFilters from "./StaffAttendanceFilters";
+import { formatMinutesLate } from "@/lib/format";
 
 export default async function StaffAttendancePage({
   searchParams,
@@ -132,7 +133,8 @@ export default async function StaffAttendancePage({
       sign_in_method,
       sign_out_method,
       status,
-      minutes_late
+      minutes_late,
+      notes
     `)
     .eq("school_id", profile.school_id)
     .eq("attendance_date", selectedDate);
@@ -567,6 +569,9 @@ export default async function StaffAttendancePage({
                   const record =
                     staffMember.attendance;
 
+                  const isAutoSignedOut =
+                    record?.sign_out_method === "system";
+
                     const issues: string[] = [];
 
                   /*
@@ -598,7 +603,7 @@ export default async function StaffAttendancePage({
                     record.minutes_late > 0
                   ) {
                     issues.push(
-                      `${record.minutes_late} min late`
+                      `${formatMinutesLate(record.minutes_late)} late`
                     );
                   }
 
@@ -737,6 +742,15 @@ export default async function StaffAttendancePage({
                           record?.sign_out_at
                         )}
 
+                        {isAutoSignedOut && (
+                          <div
+                            className="text-[11px] font-normal text-gray-400 mt-0.5"
+                            title={record?.notes ?? undefined}
+                          >
+                            Auto (system)
+                          </div>
+                        )}
+
                       </td>
 
 
@@ -748,7 +762,7 @@ export default async function StaffAttendancePage({
                         record.minutes_late > 0 ? (
 
                           <span className="text-red-600 font-medium">
-                            {record.minutes_late} min
+                            {formatMinutesLate(record.minutes_late)}
                           </span>
 
                         ) : (
@@ -780,9 +794,18 @@ export default async function StaffAttendancePage({
 
                     <td className="px-5 py-4">
 
-                      {issues.length > 0 ? (
+                      {issues.length > 0 || isAutoSignedOut ? (
 
                         <div className="flex flex-wrap gap-1">
+
+                          {isAutoSignedOut && (
+                            <span
+                              className="inline-flex items-center rounded-full bg-blue-50 px-2 py-1 text-[11px] font-medium text-blue-700"
+                              title={record?.notes ?? undefined}
+                            >
+                              Auto signed out
+                            </span>
+                          )}
 
                           {issues.map((issue) => (
 

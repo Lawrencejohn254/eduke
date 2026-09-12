@@ -16,6 +16,18 @@ export function formatDateDMY(date: string | Date | null | undefined): string {
   return `${day}/${month}/${year}`;
 }
 
+// staff_attendance.minutes_late is stored as whole minutes only — there is no
+// seconds-level precision anywhere in the data, so this deliberately only
+// ever renders hours + minutes (never a fake "0s").
+export function formatMinutesLate(totalMinutes: number | null | undefined): string {
+  if (!totalMinutes || totalMinutes <= 0) return "-";
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours === 0) return `${minutes}m`;
+  if (minutes === 0) return `${hours}h`;
+  return `${hours}h ${minutes}m`;
+}
+
 // Kenya grading — supports both 8-4-4 (default) and CBC. Mirrors the DB trigger, used for
 // optimistic client-side display. Pass curriculumType="CBC" to get the EE/ME/AE/BE rubric;
 // omit it (or pass "8-4-4") to get the traditional A-E letter scale.

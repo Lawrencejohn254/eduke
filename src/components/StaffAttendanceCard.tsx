@@ -11,6 +11,7 @@ import {
   Loader2,
   MapPin,
 } from "lucide-react";
+import { formatMinutesLate } from "@/lib/format";
 
 type AttendanceRecord = {
   id: string;
@@ -439,7 +440,7 @@ export default function StaffAttendanceCard({
               attendance?.minutes_late !== undefined &&
               attendance.minutes_late > 0 && (
                 <p className="text-xs text-orange-600 mt-1">
-                  {attendance.minutes_late} minutes late
+                  {formatMinutesLate(attendance.minutes_late)} late
                 </p>
               )}
           </div>

@@ -26,6 +26,7 @@ export default function RecordPaymentForm({
   const [amount, setAmount] = useState("");
   const [category, setCategory] = useState("Tuition");
   const [method, setMethod] = useState("Cash");
+  const [mpesaReference, setMpesaReference] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
@@ -54,12 +55,18 @@ export default function RecordPaymentForm({
     setStudentId("");
     setSearchQuery("");
     setAmount("");
+    setMethod("Cash");
+    setMpesaReference("");
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!studentId) {
       setError("Search for and select a student first.");
+      return;
+    }
+    if (method === "M-Pesa" && !mpesaReference.trim()) {
+      setError("Enter the M-Pesa transaction code.");
       return;
     }
     setSaving(true);
@@ -71,6 +78,7 @@ export default function RecordPaymentForm({
       amount: Number(amount),
       fee_category: category,
       payment_method: method,
+      mpesa_reference: method === "M-Pesa" ? mpesaReference.trim().toUpperCase() : null,
       received_by: recordedBy,
       status: "Confirmed",
     });
@@ -145,6 +153,15 @@ export default function RecordPaymentForm({
               <select value={method} onChange={(e) => setMethod(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm">
                 {METHODS.map((m) => <option key={m}>{m}</option>)}
               </select>
+              {method === "M-Pesa" && (
+                <input
+                  required
+                  value={mpesaReference}
+                  onChange={(e) => setMpesaReference(e.target.value)}
+                  placeholder="M-Pesa transaction code (e.g. QGH7XYZ123)"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm uppercase"
+                />
+              )}
               {error && <p className="text-sm text-red-600">{error}</p>}
               <button type="submit" disabled={saving} className="w-full flex items-center justify-center gap-2 bg-eduke-green text-white font-medium rounded-lg py-2.5 text-sm disabled:opacity-50">
                 {saving && <Loader2 size={16} className="animate-spin" />} Save Payment

@@ -27,6 +27,7 @@ import {
   Clock,
   FileBarChart,
   ClipboardCheck,
+  Receipt,
 } from "lucide-react";
 
 type NavItem = {
@@ -57,6 +58,7 @@ const PRINCIPAL_NAV: NavItem[] = [
   { label: "Lesson Plans", href: "/lesson-plans", icon: ClipboardList },
   { label: "Schemes of Work", href: "/schemes-of-work", icon: NotebookPen },
   { label: "Fees (Ada)", href: "/fees/payments", icon: Wallet },
+  { label: "Expenses", href: "/expenses", icon: Receipt },
   { label: "Reports", href: "/fees/reports", icon: BarChart3 },
   { label: "Communications", href: "/communications", icon: MessageSquare },
   { label: "Library", href: "/library", icon: Library },
@@ -123,6 +125,7 @@ const BURSAR_NAV: NavItem[] = [
   { label: "Fee Structure", href: "/fees/structure", icon: Wallet },
   { label: "Fee Payments (Ada)", href: "/fees/payments", icon: Wallet },
   { label: "Fee Defaulters", href: "/fees/defaulters", icon: BarChart3 },
+  { label: "Expenses", href: "/expenses", icon: Receipt },
   { label: "Finance Reports", href: "/fees/reports", icon: BarChart3 },
   { label: "Communications", href: "/communications", icon: MessageSquare },
 ];

@@ -26,6 +26,7 @@ export default async function StudentsPage() {
     profile.role === "teacher" && (profile.school?.student_enrollment_enabled ?? false);
 
   const canAdd = isAdminTier || isTeacherEnrollmentOpen;
+  const canDelete = isAdminTier; // Deletion is never available to teachers, enrollment open or not.
 
   return (
     <div className="space-y-4">
@@ -59,6 +60,7 @@ export default async function StudentsPage() {
             students={students as never}
             streams={streams ?? []}
             canEdit={canAdd}
+            canDelete={canDelete}
           />
         )
       )}

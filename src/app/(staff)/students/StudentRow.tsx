@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Pencil, X, Loader2, Eye, UserPlus } from "lucide-react";
+import { Pencil, X, Loader2, Eye, UserPlus, Trash2, AlertTriangle } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -28,6 +28,7 @@ export default function StudentRow({
   streamName,
   streams,
   canEdit,
+  canDelete,
 }: {
   id: string;
   admissionNumber: string;
@@ -44,6 +45,7 @@ export default function StudentRow({
   streamName: string;
   streams: StreamOption[];
   canEdit: boolean;
+  canDelete: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [fName, setFName] = useState(firstName);
@@ -64,6 +66,12 @@ export default function StudentRow({
   const [guardianRelationship, setGuardianRelationship] = useState(RELATIONSHIPS[0]);
   const [guardianBusy, setGuardianBusy] = useState(false);
   const [guardianMessage, setGuardianMessage] = useState<string | null>(null);
+
+  // Delete confirmation
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [confirmText, setConfirmText] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const router = useRouter();
 
@@ -94,6 +102,32 @@ export default function StudentRow({
       return;
     }
     setOpen(false);
+    router.refresh();
+  }
+
+  async function handleDelete() {
+    if (confirmText.trim() !== admissionNumber) return;
+    setDeleting(true);
+    setDeleteError(null);
+    const supabase = createClient();
+
+    const { error } = await supabase.from("students").delete().eq("id", id);
+
+    setDeleting(false);
+
+    if (error) {
+      // RLS ("students staff delete") is the real gate — this covers the
+      // case where something other than principal/deputy_principal/
+      // super_admin somehow reaches this button.
+      setDeleteError(
+        error.code === "42501"
+          ? "You don't have permission to delete this student."
+          : error.message
+      );
+      return;
+    }
+
+    setDeleteOpen(false);
     router.refresh();
   }
 
@@ -162,6 +196,18 @@ export default function StudentRow({
           {canEdit && (
             <button onClick={() => setOpen(true)} className="flex items-center gap-1 text-xs font-medium text-eduke-green hover:underline">
               <Pencil size={13} /> Edit
+            </button>
+          )}
+          {canDelete && (
+            <button
+              onClick={() => {
+                setConfirmText("");
+                setDeleteError(null);
+                setDeleteOpen(true);
+              }}
+              className="flex items-center gap-1 text-xs font-medium text-red-600 hover:underline"
+            >
+              <Trash2 size={13} /> Delete
             </button>
           )}
         </td>
@@ -266,6 +312,58 @@ export default function StudentRow({
                     {saving && <Loader2 size={16} className="animate-spin" />} Save Changes
                   </button>
                 </form>
+              </div>
+                        </div>
+          </td>
+        </tr>
+      )}
+
+      {deleteOpen && (
+        <tr>
+          <td colSpan={7} className="p-0">
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+              <div className="bg-white rounded-xl w-full max-w-sm p-5">
+                <div className="flex items-start gap-3 mb-4">
+                  <div className="w-9 h-9 rounded-full bg-red-50 flex items-center justify-center shrink-0">
+                    <AlertTriangle size={18} className="text-red-600" />
+                  </div>
+                  <div>
+                    <h2 className="font-semibold text-gray-900">Delete {firstName} {lastName}?</h2>
+                    <p className="text-xs text-gray-500 mt-1">
+                      This permanently erases this student and all of their records —
+                      attendance, exam results, fee payments, library borrowings, and
+                      guardian links. This cannot be undone.
+                    </p>
+                  </div>
+                </div>
+
+                <label className="text-xs font-medium text-gray-500">
+                  Type the admission number <span className="font-mono">{admissionNumber}</span> to confirm
+                </label>
+                <input
+                  value={confirmText}
+                  onChange={(e) => setConfirmText(e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm mt-1"
+                  autoFocus
+                />
+
+                {deleteError && <p className="text-sm text-red-600 mt-2">{deleteError}</p>}
+
+                <div className="flex gap-2 mt-4">
+                  <button
+                    onClick={() => setDeleteOpen(false)}
+                    className="flex-1 text-sm font-medium text-gray-600 border border-gray-300 rounded-lg py-2 hover:bg-gray-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleDelete}
+                    disabled={deleting || confirmText.trim() !== admissionNumber}
+                    className="flex-1 flex items-center justify-center gap-2 bg-red-600 text-white text-sm font-medium rounded-lg py-2 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {deleting && <Loader2 size={14} className="animate-spin" />} Delete Permanently
+                  </button>
+                </div>
               </div>
             </div>
           </td>

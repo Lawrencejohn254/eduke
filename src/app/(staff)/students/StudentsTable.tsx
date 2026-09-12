@@ -25,10 +25,12 @@ export default function StudentsTable({
   students,
   streams,
   canEdit,
+  canDelete,
 }: {
   students: Student[];
   streams: unknown;
   canEdit: boolean;
+  canDelete: boolean;
 }) {
   const [query, setQuery] = useState("");
 
@@ -101,6 +103,7 @@ export default function StudentsTable({
                   streamName={s.stream?.name ?? "-"}
                   streams={streams as never}
                   canEdit={canEdit}
+                  canDelete={canDelete}
                 />
               ))}
             </tbody>

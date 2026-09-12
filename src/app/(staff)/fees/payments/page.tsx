@@ -4,6 +4,7 @@ import { EmptyState } from "@/components/Loaders";
 import StatusBadge from "@/components/StatusBadge";
 import { formatKES, formatDateDMY } from "@/lib/format";
 import RecordPaymentForm from "./RecordPaymentForm";
+import PrintReceiptButton from "./PrintReceiptButton";
 
 export default async function FeePaymentsPage() {
   const profile = await getProfileOrRedirect();
@@ -12,7 +13,7 @@ export default async function FeePaymentsPage() {
   const { data: payments } = await supabase
     .from("fee_payments")
     .select(
-      "id, amount, payment_method, receipt_number, payment_date, fee_category, status, student:students!inner(first_name, last_name, admission_number, school_id)"
+      "id, amount, payment_method, mpesa_reference, receipt_number, payment_date, fee_category, status, student:students!inner(first_name, last_name, admission_number, school_id)"
     )
     .eq("student.school_id", profile.school_id)
     .order("payment_date", { ascending: false })
@@ -29,6 +30,25 @@ export default async function FeePaymentsPage() {
     .select("id, term_number, academic_year:academic_years(year)")
     .eq("is_current", true)
     .maybeSingle();
+
+  const { data: school } = await supabase
+    .from("schools")
+    .select("name")
+    .eq("id", profile.school_id)
+    .maybeSingle();
+
+  const { data: staffRecord } = profile.staff_id
+    ? await supabase
+        .from("staff")
+        .select("first_name, last_name, department")
+        .eq("id", profile.staff_id)
+        .maybeSingle()
+    : { data: null };
+
+  const schoolName = school?.name ?? "";
+  const printedBy = staffRecord
+  ? `${staffRecord.first_name} ${staffRecord.last_name}${staffRecord.department ? ` · ${staffRecord.department}` : ""}`
+  : "Finance Department";
 
   // Only the Bursar records payments — Principal/Deputy/Super Admin can view but not enter them.
   const canRecord = profile.role === "bursar";
@@ -73,6 +93,7 @@ export default async function FeePaymentsPage() {
                 <th className="p-3">Method</th>
                 <th className="p-3">Date</th>
                 <th className="p-3">Status</th>
+                <th className="p-3"></th>
               </tr>
             </thead>
             <tbody>
@@ -84,9 +105,28 @@ export default async function FeePaymentsPage() {
                     <td className="p-3 font-medium text-gray-900">{student.first_name} {student.last_name} <span className="text-gray-400 font-normal">({student.admission_number})</span></td>
                     <td className="p-3 text-gray-600">{p.fee_category ?? "-"}</td>
                     <td className="p-3 font-semibold text-gray-900">{formatKES(p.amount)}</td>
-                    <td className="p-3 text-gray-600">{p.payment_method ?? "-"}</td>
+                    <td className="p-3 text-gray-600">
+                      {p.payment_method ?? "-"}
+                      {p.mpesa_reference && <span className="block text-[11px] text-gray-400 font-mono">{p.mpesa_reference}</span>}
+                    </td>
                     <td className="p-3 text-gray-500 text-xs">{formatDateDMY(p.payment_date)}</td>
                     <td className="p-3"><StatusBadge status={p.status} /></td>
+                    <td className="p-3">
+                      <PrintReceiptButton
+                        data={{
+                          receiptNumber: p.receipt_number,
+                          studentName: `${student.first_name} ${student.last_name}`,
+                          admissionNumber: student.admission_number,
+                          amount: Number(p.amount),
+                          feeCategory: p.fee_category,
+                          paymentMethod: p.payment_method,
+                          mpesaReference: p.mpesa_reference,
+                          paymentDate: p.payment_date ? formatDateDMY(p.payment_date) : null,
+                          schoolName,
+                          printedBy,
+                        }}
+                      />
+                    </td>
                   </tr>
                 );
               })}
