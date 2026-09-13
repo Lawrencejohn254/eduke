@@ -20,12 +20,21 @@ export default async function AuditLogPage() {
 
   const supabase = await createClient();
 
-  const { data: activity } = await supabase
-    .from("audit_log")
-    .select("id, actor_name, actor_role, action, entity_type, entity_id, details, created_at")
-    .eq("school_id", profile.school_id)
-    .order("created_at", { ascending: false })
-    .limit(200);
+  // `activity` and `logins` don't depend on each other — fetch together.
+  const [{ data: activity }, { data: logins }] = await Promise.all([
+    supabase
+      .from("audit_log")
+      .select("id, actor_name, actor_role, action, entity_type, entity_id, details, created_at")
+      .eq("school_id", profile.school_id)
+      .order("created_at", { ascending: false })
+      .limit(200),
+    supabase
+      .from("login_sessions")
+      .select("id, user_name, user_role, logged_in_at, user_agent")
+      .eq("school_id", profile.school_id)
+      .order("logged_in_at", { ascending: false })
+      .limit(100),
+  ]);
 
   const rows = activity ?? [];
 
@@ -41,14 +50,15 @@ export default async function AuditLogPage() {
     )
   );
 
-  const { data: studentsLookup } = studentIds.length
-    ? await supabase.from("students").select("id, first_name, last_name, admission_number, class:classes(name)").in("id", studentIds)
-    : { data: [] };
+  const [{ data: studentsLookup }, { data: subjectsLookup }] = await Promise.all([
+    studentIds.length
+      ? supabase.from("students").select("id, first_name, last_name, admission_number, class:classes(name)").in("id", studentIds)
+      : Promise.resolve({ data: [] as never[] }),
+    subjectIds.length
+      ? supabase.from("subjects").select("id, name").in("id", subjectIds)
+      : Promise.resolve({ data: [] as never[] }),
+  ]);
   const studentMap = new Map((studentsLookup ?? []).map((s) => [s.id, s]));
-
-  const { data: subjectsLookup } = subjectIds.length
-    ? await supabase.from("subjects").select("id, name").in("id", subjectIds)
-    : { data: [] };
   const subjectMap = new Map((subjectsLookup ?? []).map((s) => [s.id, s.name]));
 
   const enrichedActivity = rows.map((r) => {
@@ -66,12 +76,6 @@ export default async function AuditLogPage() {
     };
   });
 
-  const { data: logins } = await supabase
-    .from("login_sessions")
-    .select("id, user_name, user_role, logged_in_at, user_agent")
-    .eq("school_id", profile.school_id)
-    .order("logged_in_at", { ascending: false })
-    .limit(100);
 
   return (
     <div className="space-y-4">

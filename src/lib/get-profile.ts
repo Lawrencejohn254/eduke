@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { cache } from "react";
 
 export type Profile = {
   id: string;
@@ -28,7 +29,7 @@ export type Profile = {
   } | null;
 };
 
-export async function getProfileOrRedirect(): Promise<Profile> {
+export const getProfileOrRedirect = cache(async (): Promise<Profile> => {
   const supabase = await createClient();
 
   const {
@@ -75,4 +76,4 @@ export async function getProfileOrRedirect(): Promise<Profile> {
   }
 
   return profile as Profile;
-}
+});

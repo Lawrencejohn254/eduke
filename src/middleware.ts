@@ -101,22 +101,6 @@ export async function middleware(request: NextRequest) {
       }
     }
 
-        // OTP gate: logged in, but hasn't verified this login yet
-    if (user && !isPublic && !isOtpExempt) {
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("otp_verified")
-        .eq("id", user.id)
-        .single();
-
-      if (profile && profile.otp_verified === false) {
-        const url = request.nextUrl.clone();
-        url.pathname = "/verify-login";
-        url.searchParams.set("email", user.email ?? "");
-        return NextResponse.redirect(url);
-      }
-    }
-
     // ── Student enrollment gate ──────────────────────────────────────────
     // Teachers may only access /students while their school's enrollment
     // workflow is open (schools.student_enrollment_enabled). This is a UX

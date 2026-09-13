@@ -10,16 +10,20 @@ export default async function StudentsPage() {
   const profile = await getProfileOrRedirect();
   const supabase = await createClient();
 
-  const { data: students, error: studentsError } = await supabase
-    .from("students")
-    .select("id, admission_number, first_name, last_name, gender, status, stream_id, date_of_birth, kcpe_index, nemis_id, previous_school, class:classes(name), stream:streams(name)")
-    .eq("school_id", profile.school_id)
-    .order("first_name");
-
-  const { data: streams } = await supabase
-    .from("streams")
-    .select("id, name, class:classes(id, name)")
-    .order("name");
+  const [
+    { data: students, error: studentsError },
+    { data: streams },
+  ] = await Promise.all([
+    supabase
+      .from("students")
+      .select("id, admission_number, first_name, last_name, gender, status, stream_id, date_of_birth, kcpe_index, nemis_id, previous_school, class:classes(name), stream:streams(name)")
+      .eq("school_id", profile.school_id)
+      .order("first_name"),
+    supabase
+      .from("streams")
+      .select("id, name, class:classes(id, name)")
+      .order("name"),
+  ]);
 
   const isAdminTier = ["principal", "deputy_principal", "super_admin"].includes(profile.role);
   const isTeacherEnrollmentOpen =

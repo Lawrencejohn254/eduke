@@ -23,6 +23,9 @@ export default async function TeacherDashboardPage({
 
   /*
    * SCHOOL TIMEZONE
+   *
+   * This has to be fetched first because the timetable query below
+   * (today's day-of-week) depends on it.
    */
 
   const { data: school } = await supabase
@@ -32,10 +35,7 @@ export default async function TeacherDashboardPage({
     .maybeSingle();
 
   const timezone = school?.timezone ?? "Africa/Nairobi";
-
-  /*
-   * TODAY'S TIMETABLE (for the floating current/next-class widget)
-   */
+  const today = getDateInTimezone(timezone);
 
   const todayWeekdayName = new Intl.DateTimeFormat("en-US", {
     timeZone: timezone,
@@ -45,62 +45,112 @@ export default async function TeacherDashboardPage({
   // DAY_NAMES is Monday-first, matching timetable_slots.day_of_week (1=Monday...7=Sunday) exactly.
   const todayIsoDay = DAY_NAMES.indexOf(todayWeekdayName) + 1;
 
-  const { data: todaySlots } = staffId
-    ? await supabase
-        .from("timetable_slots")
-        .select("id, title, color, start_time, end_time, stream:streams(name, class:classes(name))")
-        .eq("teacher_id", staffId)
-        .eq("day_of_week", todayIsoDay)
-        .order("start_time")
-    : { data: [] };
+  const weekAgo = new Date();
+  weekAgo.setDate(weekAgo.getDate() - 7);
 
   /*
-   * TODAY'S STAFF ATTENDANCE
-   *
-   * The StaffAttendanceCard handles sign-in/sign-out
-   * through secure RPC functions.
+   * Everything below is independent of everything else — none of these
+   * eight queries need the result of another one — so they're fired
+   * together instead of one after another. This is the single biggest
+   * latency win on this page: eight sequential round trips becomes one.
    */
 
-  const today = getDateInTimezone(timezone);
+  const [
+    { data: todaySlots },
+    { data: todayStaffAttendance },
+    { data: assignments },
+    { data: lessonPlans },
+    { data: lessonPlansToReview },
+    { data: schemes },
+    { data: schemesToReview },
+    { count: pendingMarks },
+  ] = await Promise.all([
+    /* TODAY'S TIMETABLE (for the floating current/next-class widget) */
+    staffId
+      ? supabase
+          .from("timetable_slots")
+          .select("id, title, color, start_time, end_time, stream:streams(name, class:classes(name))")
+          .eq("teacher_id", staffId)
+          .eq("day_of_week", todayIsoDay)
+          .order("start_time")
+      : Promise.resolve({ data: [] as never[] }),
 
-const { data: todayStaffAttendance } = staffId
-  ? await supabase
-      .from("staff_attendance")
-      .select(`
-        id,
-        school_id,
-        staff_id,
-        attendance_date,
-        sign_in_at,
-        sign_out_at,
-        sign_in_method,
-        sign_out_method,
-        status,
-        minutes_late,
-        created_at,
-        updated_at
-      `)
-      .eq("staff_id", staffId)
-      .eq("attendance_date", today)
-      .maybeSingle()
-  : { data: null };
+    /* TODAY'S STAFF ATTENDANCE — StaffAttendanceCard handles sign-in/out via RPC */
+    staffId
+      ? supabase
+          .from("staff_attendance")
+          .select(`
+            id,
+            school_id,
+            staff_id,
+            attendance_date,
+            sign_in_at,
+            sign_out_at,
+            sign_in_method,
+            sign_out_method,
+            status,
+            minutes_late,
+            created_at,
+            updated_at
+          `)
+          .eq("staff_id", staffId)
+          .eq("attendance_date", today)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
 
-  /*
-   * TEACHING ASSIGNMENTS
-   */
+    /* TEACHING ASSIGNMENTS */
+    staffId
+      ? supabase
+          .from("teacher_subjects")
+          .select(`
+            subject:subjects(name),
+            stream:streams(
+              name,
+              class:classes(name)
+            )
+          `)
+          .eq("teacher_id", staffId)
+      : Promise.resolve({ data: [] as never[] }),
 
-  const { data: assignments } = staffId
-    ? await supabase
-        .from("teacher_subjects")
-        .select(`
-          subject:subjects(name),
-          stream:streams(
-            name,
-            class:classes(name)
-          )
-        `)
-        .eq("teacher_id", staffId)
-    : { data: [] };
+    /* LESSON PLANS THIS WEEK (teacher's own submissions) */
+    staffId && !isHod
+      ? supabase
+          .from("lesson_plans")
+          .select("status")
+          .eq("teacher_id", staffId)
+          .gte("created_at", weekAgo.toISOString())
+      : Promise.resolve({ data: [] as never[] }),
+
+    /* HOD REVIEW COUNTS (lesson plans) — "what's been sent to me to review" */
+    isHod
+      ? supabase
+          .from("lesson_plans")
+          .select("status")
+          .or(`assigned_hod_id.eq.${staffId},assigned_hod_id.is.null`)
+      : Promise.resolve({ data: [] as never[] }),
+
+    /* SCHEMES OF WORK (teacher's own) */
+    staffId && !isHod
+      ? supabase.from("schemes_of_work").select("status").eq("teacher_id", staffId)
+      : Promise.resolve({ data: [] as never[] }),
+
+    /* SCHEMES OF WORK (HOD review queue) */
+    isHod
+      ? supabase
+          .from("schemes_of_work")
+          .select("status")
+          .or(`assigned_hod_id.eq.${staffId},assigned_hod_id.is.null`)
+      : Promise.resolve({ data: [] as never[] }),
+
+    /* PENDING MARK ENTRY */
+    staffId
+      ? supabase
+          .from("exam_results")
+          .select("id", { count: "exact", head: true })
+          .eq("entered_by", staffId)
+          .is("marks_obtained", null)
+      : Promise.resolve({ count: 0 }),
+  ]);
 
   const classesStreams = Array.from(
     new Set(
@@ -121,22 +171,6 @@ const { data: todayStaffAttendance } = staffId
     )
   );
 
-  /*
-   * LESSON PLANS THIS WEEK
-   */
-
-  const weekAgo = new Date();
-
-  weekAgo.setDate(weekAgo.getDate() - 7);
-
-  const { data: lessonPlans } = staffId && !isHod
-    ? await supabase
-        .from("lesson_plans")
-        .select("status")
-        .eq("teacher_id", staffId)
-        .gte("created_at", weekAgo.toISOString())
-    : { data: [] };
-
   const lpCounts = {
     Submitted: 0,
     Draft: 0,
@@ -151,19 +185,6 @@ const { data: todayStaffAttendance } = staffId
     }
   }
 
-  /*
-   * HOD REVIEW COUNTS (lesson plans) — replaces the self-submission stats
-   * above with "what's been sent to me to review", matching the
-   * assigned_hod_id-scoped Pending Reviews list below.
-   */
-
-  const { data: lessonPlansToReview } = isHod
-    ? await supabase
-        .from("lesson_plans")
-        .select("status")
-        .or(`assigned_hod_id.eq.${staffId},assigned_hod_id.is.null`)
-    : { data: [] };
-
   const hodLpCounts = {
     Submitted: 0,
     Approved: 0,
@@ -175,24 +196,6 @@ const { data: todayStaffAttendance } = staffId
       hodLpCounts[lp.status as keyof typeof hodLpCounts]++;
     }
   }
-
-  /*
-   * SCHEMES OF WORK
-   */
-
-  const { data: schemes } = staffId && !isHod
-    ? await supabase
-        .from("schemes_of_work")
-        .select("status")
-        .eq("teacher_id", staffId)
-    : { data: [] };
-
-  const { data: schemesToReview } = isHod
-    ? await supabase
-        .from("schemes_of_work")
-        .select("status")
-        .or(`assigned_hod_id.eq.${staffId},assigned_hod_id.is.null`)
-    : { data: [] };
 
   const hodSchemeCounts = {
     Submitted: 0,
@@ -207,22 +210,11 @@ const { data: todayStaffAttendance } = staffId
   }
 
   /*
-   * PENDING MARK ENTRY
-   */
-
-  const { count: pendingMarks } = staffId
-    ? await supabase
-        .from("exam_results")
-        .select("id", {
-          count: "exact",
-          head: true,
-        })
-        .eq("entered_by", staffId)
-        .is("marks_obtained", null)
-    : { count: 0 };
-
-  /*
    * HOD PENDING REVIEWS
+   *
+   * This one legitimately runs after the block above — it's a separate,
+   * heavier query (joins in teacher names) that's only needed for HODs,
+   * so there's no benefit to bundling it into the Promise.all above.
    */
 
   let pendingReviews: {

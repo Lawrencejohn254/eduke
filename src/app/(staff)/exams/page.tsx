@@ -19,19 +19,23 @@ export default async function ExamsPage({
   const canViewAnalytics = ["principal", "deputy_principal", "super_admin", "hod"].includes(profile.role);
   const params = await searchParams;
 
-  const { data: classes } = await supabase.from("classes").select("id, name").eq("school_id", profile.school_id).order("name");
-
-  let query = supabase
+  let examsQuery = supabase
     .from("exams")
     .select("id, name, exam_type, start_date, end_date, status, class:classes(name)")
     .eq("school_id", profile.school_id)
     .order("start_date", { ascending: false });
 
-  if (params.class) query = query.eq("class_id", params.class);
+  if (params.class) examsQuery = examsQuery.eq("class_id", params.class);
 
-  const { data: exams } = await query;
-
-  const { data: currentTerm } = await supabase.from("terms").select("id").eq("is_current", true).maybeSingle();
+  const [
+    { data: classes },
+    { data: exams },
+    { data: currentTerm },
+  ] = await Promise.all([
+    supabase.from("classes").select("id, name").eq("school_id", profile.school_id).order("name"),
+    examsQuery,
+    supabase.from("terms").select("id").eq("is_current", true).maybeSingle(),
+  ]);
 
   return (
     <div className="space-y-4">

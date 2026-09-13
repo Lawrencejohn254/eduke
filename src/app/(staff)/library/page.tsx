@@ -8,24 +8,28 @@ export default async function LibraryPage() {
   const supabase = await createClient();
   const canManage = ["principal", "deputy_principal", "super_admin", "hod", "teacher"].includes(profile.role);
 
-  const { data: books, error: booksError } = await supabase
-    .from("books")
-    .select("id, title, author, isbn, category, total_copies, available_copies")
-    .eq("school_id", profile.school_id)
-    .order("title");
-
-  const { data: students } = await supabase
-    .from("students")
-    .select("id, first_name, last_name, admission_number")
-    .eq("school_id", profile.school_id)
-    .eq("status", "Active")
-    .order("first_name");
-
-  const { data: borrowings } = await supabase
-    .from("book_borrowings")
-    .select("id, borrowed_date, due_date, returned_date, status, book_id, book:books!inner(title, school_id), student:students(first_name, last_name, admission_number)")
-    .eq("book.school_id", profile.school_id)
-    .order("borrowed_date", { ascending: false });
+  const [
+    { data: books, error: booksError },
+    { data: students },
+    { data: borrowings },
+  ] = await Promise.all([
+    supabase
+      .from("books")
+      .select("id, title, author, isbn, category, total_copies, available_copies")
+      .eq("school_id", profile.school_id)
+      .order("title"),
+    supabase
+      .from("students")
+      .select("id, first_name, last_name, admission_number")
+      .eq("school_id", profile.school_id)
+      .eq("status", "Active")
+      .order("first_name"),
+    supabase
+      .from("book_borrowings")
+      .select("id, borrowed_date, due_date, returned_date, status, book_id, book:books!inner(title, school_id), student:students(first_name, last_name, admission_number)")
+      .eq("book.school_id", profile.school_id)
+      .order("borrowed_date", { ascending: false }),
+  ]);
 
   return (
     <div className="space-y-4">
