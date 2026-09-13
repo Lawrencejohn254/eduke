@@ -13,7 +13,7 @@ export default async function LessonPlansPage() {
   let query = supabase
     .from("lesson_plans")
     .select(
-      "id, topic, subtopic, week_number, status, ai_generated, submitted_at, hod_comments, content, subject:subjects(name), stream:streams(name, class:classes(name)), teacher:staff!lesson_plans_teacher_id_fkey(first_name, last_name)"
+      "id, topic, subtopic, week_number, status, ai_generated, submitted_at, hod_comments, teacher_response, reviewed_by, content, subject:subjects(name), stream:streams(name, class:classes(name)), teacher:staff!lesson_plans_teacher_id_fkey(first_name, last_name)"
     )
     .order("submitted_at", { ascending: false, nullsFirst: false });
 
@@ -79,6 +79,8 @@ export default async function LessonPlansPage() {
                     submitted={formatDateDMY(lp.submitted_at)}
                     content={lp.content ?? ""}
                     hodComments={lp.hod_comments}
+                    teacherResponse={lp.teacher_response}
+                    reviewedBy={lp.reviewed_by}
                     canReview={canReview}
                   />
                 );

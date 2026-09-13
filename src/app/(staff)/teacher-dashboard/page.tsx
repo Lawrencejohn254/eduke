@@ -129,7 +129,7 @@ const { data: todayStaffAttendance } = staffId
 
   weekAgo.setDate(weekAgo.getDate() - 7);
 
-  const { data: lessonPlans } = staffId
+  const { data: lessonPlans } = staffId && !isHod
     ? await supabase
         .from("lesson_plans")
         .select("status")
@@ -152,15 +152,59 @@ const { data: todayStaffAttendance } = staffId
   }
 
   /*
+   * HOD REVIEW COUNTS (lesson plans) — replaces the self-submission stats
+   * above with "what's been sent to me to review", matching the
+   * assigned_hod_id-scoped Pending Reviews list below.
+   */
+
+  const { data: lessonPlansToReview } = isHod
+    ? await supabase
+        .from("lesson_plans")
+        .select("status")
+        .or(`assigned_hod_id.eq.${staffId},assigned_hod_id.is.null`)
+    : { data: [] };
+
+  const hodLpCounts = {
+    Submitted: 0,
+    Approved: 0,
+    Returned: 0,
+  };
+
+  for (const lp of lessonPlansToReview ?? []) {
+    if (lp.status in hodLpCounts) {
+      hodLpCounts[lp.status as keyof typeof hodLpCounts]++;
+    }
+  }
+
+  /*
    * SCHEMES OF WORK
    */
 
-  const { data: schemes } = staffId
+  const { data: schemes } = staffId && !isHod
     ? await supabase
         .from("schemes_of_work")
         .select("status")
         .eq("teacher_id", staffId)
     : { data: [] };
+
+  const { data: schemesToReview } = isHod
+    ? await supabase
+        .from("schemes_of_work")
+        .select("status")
+        .or(`assigned_hod_id.eq.${staffId},assigned_hod_id.is.null`)
+    : { data: [] };
+
+  const hodSchemeCounts = {
+    Submitted: 0,
+    Approved: 0,
+    Returned: 0,
+  };
+
+  for (const sc of schemesToReview ?? []) {
+    if (sc.status in hodSchemeCounts) {
+      hodSchemeCounts[sc.status as keyof typeof hodSchemeCounts]++;
+    }
+  }
 
   /*
    * PENDING MARK ENTRY
@@ -185,24 +229,45 @@ const { data: todayStaffAttendance } = staffId
     id: string;
     topic: string;
     teacher: string | null;
+    type: "Lesson Plan" | "Scheme of Work";
+    href: string;
   }[] = [];
 
   if (isHod) {
-    const { data } = await supabase
-      .from("lesson_plans")
-      .select(`
-        id,
-        topic,
-        status,
-        teacher:staff!lesson_plans_teacher_id_fkey(
-          first_name,
-          last_name
-        )
-      `)
-      .eq("status", "Submitted")
-      .limit(10);
+    const [{ data: lpData }, { data: scData }] = await Promise.all([
+      supabase
+        .from("lesson_plans")
+        .select(`
+          id,
+          topic,
+          status,
+          teacher:staff!lesson_plans_teacher_id_fkey(
+            first_name,
+            last_name
+          )
+        `)
+        .eq("status", "Submitted")
+        // Show plans sent specifically to me, plus older/legacy submissions
+        // that predate this feature and were never assigned to anyone.
+        .or(`assigned_hod_id.eq.${staffId},assigned_hod_id.is.null`)
+        .limit(10),
+      supabase
+        .from("schemes_of_work")
+        .select(`
+          id,
+          title,
+          status,
+          teacher:staff!schemes_of_work_teacher_id_fkey(
+            first_name,
+            last_name
+          )
+        `)
+        .eq("status", "Submitted")
+        .or(`assigned_hod_id.eq.${staffId},assigned_hod_id.is.null`)
+        .limit(10),
+    ]);
 
-    pendingReviews = (data ?? []).map((item) => {
+    const lpReviews = (lpData ?? []).map((item) => {
       const teacher = item.teacher as unknown as {
         first_name: string;
         last_name: string;
@@ -211,11 +276,28 @@ const { data: todayStaffAttendance } = staffId
       return {
         id: item.id,
         topic: item.topic,
-        teacher: teacher
-          ? `${teacher.first_name} ${teacher.last_name}`
-          : null,
+        teacher: teacher ? `${teacher.first_name} ${teacher.last_name}` : null,
+        type: "Lesson Plan" as const,
+        href: "/lesson-plans",
       };
     });
+
+    const scReviews = (scData ?? []).map((item) => {
+      const teacher = item.teacher as unknown as {
+        first_name: string;
+        last_name: string;
+      } | null;
+
+      return {
+        id: item.id,
+        topic: item.title,
+        teacher: teacher ? `${teacher.first_name} ${teacher.last_name}` : null,
+        type: "Scheme of Work" as const,
+        href: "/schemes-of-work",
+      };
+    });
+
+    pendingReviews = [...lpReviews, ...scReviews].slice(0, 10);
   }
 
   return (
@@ -293,16 +375,26 @@ const { data: todayStaffAttendance } = staffId
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
 
             <p className="text-xs font-medium text-gray-500">
-              Lesson Plans This Week
+              {isHod ? "Lesson Plans to Review" : "Lesson Plans This Week"}
             </p>
 
-            <p className="text-sm text-gray-900 mt-1">
-              {lpCounts.Submitted} submitted
-              {" · "}
-              {lpCounts.Draft} pending
-              {" · "}
-              {lpCounts.Returned} returned
-            </p>
+            {isHod ? (
+              <p className="text-sm text-gray-900 mt-1">
+                {hodLpCounts.Submitted} pending
+                {" · "}
+                {hodLpCounts.Approved} approved
+                {" · "}
+                {hodLpCounts.Returned} returned
+              </p>
+            ) : (
+              <p className="text-sm text-gray-900 mt-1">
+                {lpCounts.Submitted} submitted
+                {" · "}
+                {lpCounts.Draft} pending
+                {" · "}
+                {lpCounts.Returned} returned
+              </p>
+            )}
 
           </div>
 
@@ -312,12 +404,22 @@ const { data: todayStaffAttendance } = staffId
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
 
             <p className="text-xs font-medium text-gray-500">
-              Schemes of Work
+              {isHod ? "Schemes of Work to Review" : "Schemes of Work"}
             </p>
 
-            <p className="text-sm text-gray-900 mt-1">
-              {(schemes ?? []).length} total
-            </p>
+            {isHod ? (
+              <p className="text-sm text-gray-900 mt-1">
+                {hodSchemeCounts.Submitted} pending
+                {" · "}
+                {hodSchemeCounts.Approved} approved
+                {" · "}
+                {hodSchemeCounts.Returned} returned
+              </p>
+            ) : (
+              <p className="text-sm text-gray-900 mt-1">
+                {(schemes ?? []).length} total
+              </p>
+            )}
 
           </div>
 
@@ -358,24 +460,27 @@ const { data: todayStaffAttendance } = staffId
           ) : (
             <div className="space-y-2">
 
-              {pendingReviews.map((lessonPlan) => (
+              {pendingReviews.map((item) => (
                 <div
-                  key={lessonPlan.id}
+                  key={`${item.type}-${item.id}`}
                   className="flex items-center justify-between border border-gray-100 rounded-lg p-3"
                 >
 
                   <div>
                     <p className="text-sm font-medium text-gray-900">
-                      {lessonPlan.topic}
+                      {item.topic}
+                      <span className="ml-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+                        {item.type}
+                      </span>
                     </p>
 
                     <p className="text-xs text-gray-500">
-                      by {lessonPlan.teacher ?? "Teacher"}
+                      by {item.teacher ?? "Teacher"}
                     </p>
                   </div>
 
                   <Link
-                    href="/lesson-plans"
+                    href={item.href}
                     className="text-xs font-semibold text-eduke-green hover:underline"
                   >
                     Review →

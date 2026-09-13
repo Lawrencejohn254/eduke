@@ -5,11 +5,13 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { Sparkles, Loader2, Copy, Download, Save, Send } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { printAsPDF } from "@/lib/print";
+import SubmitToHodModal from "./SubmitToHodModal";
 
 type Subject = { id: string; name: string; curriculum_type: string };
 type ClassRow = { id: string; name: string; curriculum_type: string };
 type StreamRow = { id: string; name: string; class: ClassRow | null };
 type Term = { id: string; label: string; termNumber: string } | null;
+type Hod = { id: string; first_name: string; last_name: string; department: string | null };
 
 const TABS = [
   { key: "lesson-plan", label: "Lesson Plan Generator" },
@@ -23,12 +25,14 @@ function AIAssistantInner({
   classes,
   streams,
   currentTerm,
+  hods,
 }: {
   staffId: string | null;
   subjects: Subject[];
   classes: ClassRow[];
   streams: StreamRow[];
   currentTerm: Term;
+  hods: Hod[];
 }) {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -64,9 +68,11 @@ function AIAssistantInner({
       </div>
 
       {tab === "lesson-plan" && (
-        <LessonPlanTab staffId={staffId} subjects={subjects} streams={streams} currentTerm={currentTerm} />
+        <LessonPlanTab staffId={staffId} subjects={subjects} streams={streams} currentTerm={currentTerm} hods={hods} />
       )}
-      {tab === "scheme" && <SchemeTab staffId={staffId} subjects={subjects} classes={classes} currentTerm={currentTerm} />}
+      {tab === "scheme" && (
+        <SchemeTab staffId={staffId} subjects={subjects} classes={classes} currentTerm={currentTerm} hods={hods} />
+      )}
       {tab === "exam-questions" && <ExamQuestionsTab staffId={staffId} subjects={subjects} classes={classes} currentTerm={currentTerm} />}
     </div>
   );
@@ -78,6 +84,7 @@ export default function AIAssistantClient(props: {
   classes: ClassRow[];
   streams: StreamRow[];
   currentTerm: Term;
+  hods: Hod[];
 }) {
   return (
     <Suspense fallback={<div className="p-6 text-sm text-gray-400">Loading AI Assistant…</div>}>
@@ -158,11 +165,13 @@ function LessonPlanTab({
   subjects,
   streams,
   currentTerm,
+  hods,
 }: {
   staffId: string | null;
   subjects: Subject[];
   streams: StreamRow[];
   currentTerm: Term;
+  hods: Hod[];
 }) {
   const [subjectId, setSubjectId] = useState(subjects[0]?.id ?? "");
   const [streamId, setStreamId] = useState(streams[0]?.id ?? "");
@@ -175,6 +184,7 @@ function LessonPlanTab({
   const [content, setContent] = useState<string | null>(null);
   const [saving, setSaving] = useState<"draft" | "submit" | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
+  const [hodModalOpen, setHodModalOpen] = useState(false);
 
   const subject = subjects.find((s) => s.id === subjectId);
   const stream = streams.find((s) => s.id === streamId);
@@ -214,7 +224,7 @@ function LessonPlanTab({
     }
   }
 
-  async function persist(status: "Draft" | "Submitted") {
+  async function persist(status: "Draft" | "Submitted", hodId?: string) {
     if (!content) return;
     if (!staffId) {
       setSaved("Error: your account isn't linked to a staff record yet — ask your principal to link it.");
@@ -240,11 +250,27 @@ function LessonPlanTab({
       subtopic,
       content,
       status,
+      assigned_hod_id: hodId ?? null,
       ai_generated: true,
       submitted_at: status === "Submitted" ? new Date().toISOString() : null,
     });
     setSaving(null);
-    setSaved(error ? `Error: ${error.message}` : status === "Draft" ? "Saved as draft." : "Submitted to HOD.");
+    const hodName = hodId ? hods.find((h) => h.id === hodId) : null;
+    setSaved(
+      error
+        ? `Error: ${error.message}`
+        : status === "Draft"
+        ? "Saved as draft."
+        : `Submitted to ${hodName ? `${hodName.first_name} ${hodName.last_name}` : "HOD"}.`
+    );
+  }
+
+  function handleSubmitClick() {
+    if (hods.length === 0) {
+      persist("Submitted"); // no HOD configured — fall back to unassigned submission
+      return;
+    }
+    setHodModalOpen(true);
   }
 
   return (
@@ -309,7 +335,7 @@ function LessonPlanTab({
             content={content}
             setContent={(v) => setContent(v)}
             onSaveDraft={() => persist("Draft")}
-            onSubmit={() => persist("Submitted")}
+            onSubmit={handleSubmitClick}
             pdfTitle={`Lesson Plan — ${topic}`}
             saving={saving}
           />
@@ -320,6 +346,18 @@ function LessonPlanTab({
         )}
         {saved && <p className="text-sm text-eduke-green mt-2 font-medium">{saved}</p>}
       </div>
+
+      {hodModalOpen && (
+        <SubmitToHodModal
+          hods={hods}
+          submitting={saving === "submit"}
+          onClose={() => setHodModalOpen(false)}
+          onConfirm={(hodId) => {
+            setHodModalOpen(false);
+            persist("Submitted", hodId);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -331,11 +369,13 @@ function SchemeTab({
   subjects,
   classes,
   currentTerm,
+  hods,
 }: {
   staffId: string | null;
   subjects: Subject[];
   classes: ClassRow[];
   currentTerm: Term;
+  hods: Hod[];
 }) {
   const [subjectId, setSubjectId] = useState(subjects[0]?.id ?? "");
   const [classId, setClassId] = useState(classes[0]?.id ?? "");
@@ -345,6 +385,7 @@ function SchemeTab({
   const [content, setContent] = useState<string | null>(null);
   const [saving, setSaving] = useState<"draft" | "submit" | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
+  const [hodModalOpen, setHodModalOpen] = useState(false);
 
   const subject = subjects.find((s) => s.id === subjectId);
   const klass = classes.find((c) => c.id === classId);
@@ -381,7 +422,7 @@ function SchemeTab({
     }
   }
 
-  async function persist(status: "Draft" | "Submitted") {
+  async function persist(status: "Draft" | "Submitted", hodId?: string) {
     if (!content) return;
     if (!staffId) {
       setSaved("Error: your account isn't linked to a staff record yet — ask your principal to link it.");
@@ -405,11 +446,27 @@ function SchemeTab({
       title: `${subject?.name} Scheme of Work — ${currentTerm.label}`,
       content,
       status,
+      assigned_hod_id: hodId ?? null,
       ai_generated: true,
       submitted_at: status === "Submitted" ? new Date().toISOString() : null,
     });
     setSaving(null);
-    setSaved(error ? `Error: ${error.message}` : status === "Draft" ? "Saved as draft." : "Submitted to HOD.");
+    const hodName = hodId ? hods.find((h) => h.id === hodId) : null;
+    setSaved(
+      error
+        ? `Error: ${error.message}`
+        : status === "Draft"
+        ? "Saved as draft."
+        : `Submitted to ${hodName ? `${hodName.first_name} ${hodName.last_name}` : "HOD"}.`
+    );
+  }
+
+  function handleSubmitClick() {
+    if (hods.length === 0) {
+      persist("Submitted");
+      return;
+    }
+    setHodModalOpen(true);
   }
 
   return (
@@ -455,7 +512,7 @@ function SchemeTab({
             content={content}
             setContent={setContent}
             onSaveDraft={() => persist("Draft")}
-            onSubmit={() => persist("Submitted")}
+            onSubmit={handleSubmitClick}
             pdfTitle={`Scheme of Work — ${subject?.name ?? ""}`}
             saving={saving}
           />
@@ -466,6 +523,18 @@ function SchemeTab({
         )}
         {saved && <p className="text-sm text-eduke-green mt-2 font-medium">{saved}</p>}
       </div>
+
+      {hodModalOpen && (
+        <SubmitToHodModal
+          hods={hods}
+          submitting={saving === "submit"}
+          onClose={() => setHodModalOpen(false)}
+          onConfirm={(hodId) => {
+            setHodModalOpen(false);
+            persist("Submitted", hodId);
+          }}
+        />
+      )}
     </div>
   );
 }

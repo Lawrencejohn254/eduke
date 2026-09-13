@@ -18,6 +18,8 @@ export default function LessonPlanRow({
   submitted,
   content,
   hodComments,
+  teacherResponse,
+  reviewedBy,
   canReview,
 }: {
   id: string;
@@ -31,11 +33,15 @@ export default function LessonPlanRow({
   submitted: string;
   content: string;
   hodComments: string | null;
+  teacherResponse: string | null;
+  reviewedBy: string | null;
   canReview: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [comment, setComment] = useState("");
   const [busy, setBusy] = useState(false);
+  const [editContent, setEditContent] = useState(content);
+  const [responseNote, setResponseNote] = useState("");
   const router = useRouter();
 
   async function approve() {
@@ -74,6 +80,26 @@ export default function LessonPlanRow({
     router.refresh();
   }
 
+  async function resubmit() {
+    setBusy(true);
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("lesson_plans")
+      .update({
+        content: editContent,
+        teacher_response: responseNote || null,
+        status: "Submitted",
+        submitted_at: new Date().toISOString(),
+        assigned_hod_id: reviewedBy, // send back to whichever HOD returned it
+      })
+      .eq("id", id);
+    setBusy(false);
+    if (!error) {
+      setResponseNote("");
+      router.refresh();
+    }
+  }
+
   return (
     <>
       <tr className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer" onClick={() => setExpanded((v) => !v)}>
@@ -90,11 +116,24 @@ export default function LessonPlanRow({
       {expanded && (
         <tr>
           <td colSpan={canReview ? 9 : 8} className="p-4 bg-gray-50">
-            <pre className="text-xs whitespace-pre-wrap font-mono bg-white rounded-lg border border-gray-200 p-3 max-h-72 overflow-y-auto">
-              {content || "No content saved."}
-            </pre>
+            {!canReview && status === "Returned" ? (
+              <textarea
+                value={editContent}
+                onChange={(e) => setEditContent(e.target.value)}
+                onClick={(e) => e.stopPropagation()}
+                rows={14}
+                className="w-full text-xs whitespace-pre-wrap font-mono bg-white rounded-lg border border-gray-300 p-3 focus:outline-none focus:ring-2 focus:ring-eduke-green"
+              />
+            ) : (
+              <pre className="text-xs whitespace-pre-wrap font-mono bg-white rounded-lg border border-gray-200 p-3 max-h-72 overflow-y-auto">
+                {content || "No content saved."}
+              </pre>
+            )}
             {hodComments && (
               <p className="text-sm text-red-600 mt-2"><strong>HOD comments:</strong> {hodComments}</p>
+            )}
+            {teacherResponse && (
+              <p className="text-sm text-blue-600 mt-1"><strong>Your response:</strong> {teacherResponse}</p>
             )}
             {canReview && status === "Submitted" && (
               <div className="mt-3 space-y-2" onClick={(e) => e.stopPropagation()}>
@@ -121,6 +160,25 @@ export default function LessonPlanRow({
                     <X size={14} /> Return with Comments
                   </button>
                 </div>
+              </div>
+            )}
+
+            {!canReview && status === "Returned" && (
+              <div className="mt-3 space-y-2" onClick={(e) => e.stopPropagation()}>
+                <textarea
+                  value={responseNote}
+                  onChange={(e) => setResponseNote(e.target.value)}
+                  placeholder="What did you change? (optional note back to your HOD)"
+                  rows={2}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                />
+                <button
+                  onClick={resubmit}
+                  disabled={busy || !editContent.trim()}
+                  className="flex items-center gap-1.5 bg-eduke-green text-white text-xs font-medium px-3 py-2 rounded-lg disabled:opacity-50"
+                >
+                  <Check size={14} /> Fix &amp; Resubmit to HOD
+                </button>
               </div>
             )}
           </td>

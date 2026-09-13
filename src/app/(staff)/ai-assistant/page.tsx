@@ -21,6 +21,14 @@ export default async function AIAssistantPage() {
     .eq("is_current", true)
     .maybeSingle();
 
+  const { data: hods } = await supabase
+    .from("staff")
+    .select("id, first_name, last_name, department")
+    .eq("school_id", profile.school_id)
+    .eq("role", "hod")
+    .eq("status", "Active")
+    .order("first_name");
+
   type Assignment = {
     subject: { id: string; name: string; curriculum_type: string } | null;
     stream: { id: string; name: string; class: { id: string; name: string; curriculum_type: string } | null } | null;
@@ -48,6 +56,7 @@ export default async function AIAssistantPage() {
       subjects={subjects}
       classes={classes}
       streams={streams}
+      hods={hods ?? []}
       currentTerm={
         currentTerm
           ? {

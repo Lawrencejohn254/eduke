@@ -13,7 +13,7 @@ export default async function SchemesOfWorkPage() {
   let query = supabase
     .from("schemes_of_work")
     .select(
-      "id, title, status, ai_generated, submitted_at, hod_comments, content, subject:subjects(name), class:classes(name), teacher:staff!schemes_of_work_teacher_id_fkey(first_name, last_name)"
+      "id, title, status, ai_generated, submitted_at, hod_comments, teacher_response, reviewed_by, content, subject:subjects(name), class:classes(name), teacher:staff!schemes_of_work_teacher_id_fkey(first_name, last_name)"
     )
     .order("submitted_at", { ascending: false, nullsFirst: false });
 
@@ -63,6 +63,8 @@ export default async function SchemesOfWorkPage() {
                     submitted={formatDateDMY(sc.submitted_at)}
                     content={sc.content ?? ""}
                     hodComments={sc.hod_comments}
+                    teacherResponse={sc.teacher_response}
+                    reviewedBy={sc.reviewed_by}
                     canReview={canReview}
                   />
                 );
