@@ -3,6 +3,8 @@ import { getProfileOrRedirect } from "@/lib/get-profile";
 import { getDateInTimezone } from "@/lib/date";
 import AIBanner from "@/components/AIBanner";
 import StaffAttendanceCard from "@/components/StaffAttendanceCard";
+import TimetableFloatingWidget from "@/components/TimetableFloatingWidget";
+import { DAY_NAMES } from "@/lib/timetable-colors";
 import Link from "next/link";
 import { EmptyState } from "@/components/Loaders";
 
@@ -30,6 +32,27 @@ export default async function TeacherDashboardPage({
     .maybeSingle();
 
   const timezone = school?.timezone ?? "Africa/Nairobi";
+
+  /*
+   * TODAY'S TIMETABLE (for the floating current/next-class widget)
+   */
+
+  const todayWeekdayName = new Intl.DateTimeFormat("en-US", {
+    timeZone: timezone,
+    weekday: "long",
+  }).format(new Date());
+
+  // DAY_NAMES is Monday-first, matching timetable_slots.day_of_week (1=Monday...7=Sunday) exactly.
+  const todayIsoDay = DAY_NAMES.indexOf(todayWeekdayName) + 1;
+
+  const { data: todaySlots } = staffId
+    ? await supabase
+        .from("timetable_slots")
+        .select("id, title, color, start_time, end_time, stream:streams(name, class:classes(name))")
+        .eq("teacher_id", staffId)
+        .eq("day_of_week", todayIsoDay)
+        .order("start_time")
+    : { data: [] };
 
   /*
    * TODAY'S STAFF ATTENDANCE
@@ -197,6 +220,8 @@ const { data: todayStaffAttendance } = staffId
 
   return (
     <div className="space-y-6">
+
+      <TimetableFloatingWidget slots={(todaySlots ?? []) as never} timezone={timezone} />
 
       {/* PAGE HEADER */}
 

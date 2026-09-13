@@ -19,6 +19,17 @@ export function formatDateDMY(date: string | Date | null | undefined): string {
 // staff_attendance.minutes_late is stored as whole minutes only — there is no
 // seconds-level precision anywhere in the data, so this deliberately only
 // ever renders hours + minutes (never a fake "0s").
+// Generic minutes -> "2h 26m" / "45m" / "3h" formatter, for anything counting
+// down or up in minutes (timetable countdowns, durations, etc).
+export function formatDurationMinutes(totalMinutes: number): string {
+  const mins = Math.max(0, Math.round(totalMinutes));
+  const hours = Math.floor(mins / 60);
+  const minutes = mins % 60;
+  if (hours === 0) return `${minutes}m`;
+  if (minutes === 0) return `${hours}h`;
+  return `${hours}h ${minutes}m`;
+}
+
 export function formatMinutesLate(totalMinutes: number | null | undefined): string {
   if (!totalMinutes || totalMinutes <= 0) return "-";
   const hours = Math.floor(totalMinutes / 60);
