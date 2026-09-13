@@ -28,6 +28,8 @@ import {
   FileBarChart,
   ClipboardCheck,
   Receipt,
+  Award,
+  Home,
 } from "lucide-react";
 
 type NavItem = {
@@ -52,6 +54,7 @@ const PRINCIPAL_NAV: NavItem[] = [
   { label: "Attendance Reports", href: "/staff-attendance/reports", icon: FileBarChart },
   { label: "Student Attendance", href: "/student-attendance", icon: ClipboardCheck },
   { label: "Exams", href: "/exams", icon: BookOpen },
+  { label: "Class Teachers", href: "/class-teachers", icon: Award },
   { label: "Timetable (Ratiba)", href: "/timetable", icon: CalendarDays },
   { label: "AI Assistant", href: "/ai-assistant", icon: Sparkles, featured: true },
   { label: "AI Insights", href: "/ai-insights", icon: Sparkles, featured: true },
@@ -94,6 +97,16 @@ const WANAFUNZI_NAV_ITEM: NavItem = {
   icon: Users,
 };
 
+// Inserted only when the signed-in teacher/HOD has an active class-teacher
+// assignment for the school's current term (see getActiveClassTeacherAssignments()).
+// Hiding this link is a UX convenience only — /my-class re-checks the
+// assignment server-side regardless of whether this item is shown.
+const MY_CLASS_NAV_ITEM: NavItem = {
+  label: "My Class",
+  href: "/my-class",
+  icon: Home,
+};
+
 /* =========================
    HOD NAVIGATION
 ========================= */
@@ -134,7 +147,11 @@ const BURSAR_NAV: NavItem[] = [
    ROLE NAVIGATION SELECTOR
 ========================= */
 
-function navForRole(role: string, studentEnrollmentEnabled: boolean): NavItem[] {
+function navForRole(
+  role: string,
+  studentEnrollmentEnabled: boolean,
+  hasActiveClassTeacherAssignment: boolean
+): NavItem[] {
   switch (role) {
     case "principal":
     case "deputy_principal":
@@ -143,15 +160,21 @@ function navForRole(role: string, studentEnrollmentEnabled: boolean): NavItem[] 
     case "school_admin":
       return PRINCIPAL_NAV;
 
-    case "hod":
-      return HOD_NAV;
+    case "hod": {
+      const [dashboard, profile, ...rest] = HOD_NAV;
+      const items = [dashboard, profile];
+      if (hasActiveClassTeacherAssignment) items.push(MY_CLASS_NAV_ITEM);
+      return [...items, ...rest];
+    }
 
     case "teacher": {
       // isTeacher && school.student_enrollment_enabled, per spec section 3.
       // UX only — real enforcement is in middleware + RLS, not here.
-      if (!studentEnrollmentEnabled) return TEACHER_NAV_BASE;
       const [dashboard, profile, ...rest] = TEACHER_NAV_BASE;
-      return [dashboard, profile, WANAFUNZI_NAV_ITEM, ...rest];
+      const items = [dashboard, profile];
+      if (hasActiveClassTeacherAssignment) items.push(MY_CLASS_NAV_ITEM);
+      if (studentEnrollmentEnabled) items.push(WANAFUNZI_NAV_ITEM);
+      return [...items, ...rest];
     }
 
     case "bursar":
@@ -169,12 +192,14 @@ function navForRole(role: string, studentEnrollmentEnabled: boolean): NavItem[] 
 export function SidebarContent({
   role,
   studentEnrollmentEnabled = false,
+  hasActiveClassTeacherAssignment = false,
 }: {
   role: string;
   studentEnrollmentEnabled?: boolean;
+  hasActiveClassTeacherAssignment?: boolean;
 }) {
   const pathname = usePathname();
-  const items = navForRole(role, studentEnrollmentEnabled);
+  const items = navForRole(role, studentEnrollmentEnabled, hasActiveClassTeacherAssignment);
 
   return (
     <>
@@ -224,13 +249,19 @@ export function SidebarContent({
 export default function Sidebar({
   role,
   studentEnrollmentEnabled = false,
+  hasActiveClassTeacherAssignment = false,
 }: {
   role: string;
   studentEnrollmentEnabled?: boolean;
+  hasActiveClassTeacherAssignment?: boolean;
 }) {
   return (
     <aside className="hidden md:flex md:flex-col w-64 shrink-0 bg-eduke-green text-white h-screen sticky top-0">
-      <SidebarContent role={role} studentEnrollmentEnabled={studentEnrollmentEnabled} />
+      <SidebarContent
+        role={role}
+        studentEnrollmentEnabled={studentEnrollmentEnabled}
+        hasActiveClassTeacherAssignment={hasActiveClassTeacherAssignment}
+      />
     </aside>
   );
 }

@@ -10,10 +10,14 @@ export default function TopBar({
   role,
   name,
   schoolName,
+  studentEnrollmentEnabled = false,
+  hasActiveClassTeacherAssignment = false,
 }: {
   role: string;
   name: string;
   schoolName?: string | null;
+  studentEnrollmentEnabled?: boolean;
+  hasActiveClassTeacherAssignment?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const router = useRouter();
@@ -49,7 +53,11 @@ export default function TopBar({
               </button>
             </div>
             <div onClick={() => setOpen(false)} className="flex-1 flex flex-col text-white overflow-y-auto">
-              <SidebarContent role={role} />
+              <SidebarContent
+                role={role}
+                studentEnrollmentEnabled={studentEnrollmentEnabled}
+                hasActiveClassTeacherAssignment={hasActiveClassTeacherAssignment}
+              />
             </div>
           </div>
         </div>
