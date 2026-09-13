@@ -15,6 +15,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import StatusBadge from "@/components/StatusBadge";
+import { Trash2, AlertTriangle } from "lucide-react";
 
 const ROLES = [
   "teacher",
@@ -101,6 +102,13 @@ export default function StaffRow({
   const [deactivating, setDeactivating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const fullName = `${firstName} ${lastName}`.trim();
+
   // Personal
   const [fName, setFName] = useState(firstName ?? "");
   const [lName, setLName] = useState(lastName ?? "");
@@ -167,11 +175,10 @@ export default function StaffRow({
     setError(null);
 
     try {
-      const supabase = createClient();
-
-      const { error } = await supabase
-        .from("staff")
-        .update({
+      const res = await fetch(`/api/staff/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
           first_name: fName.trim(),
           last_name: lName.trim(),
           staff_number: staffNo.trim() || null,
@@ -192,15 +199,21 @@ export default function StaffRow({
           nhif_number: nhif.trim() || null,
           nssf_number: nssf.trim() || null,
 
-          basic_salary: salary
-            ? Number(salary)
-            : null,
-        })
-        .eq("id", id);
+          basic_salary: salary ? Number(salary) : null,
+        }),
+      });
 
-      if (error) {
-        setError(error.message);
+      const result = await res.json();
+
+      if (!res.ok) {
+        setError(result.error ?? "Unable to update staff information.");
         return;
+      }
+
+      // Let the principal know whether the person's actual login/dashboard
+      // access changed, or why it didn't (no login yet, or an HR-only label).
+      if (result.portalRoleSkippedReason) {
+        alert(result.portalRoleSkippedReason);
       }
 
       setOpen(false);
@@ -209,6 +222,33 @@ export default function StaffRow({
       setError("Unable to update staff information.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleDelete() {
+    setDeleting(true);
+    setDeleteError(null);
+
+    try {
+      const res = await fetch(`/api/staff/${id}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirmName: deleteConfirmText }),
+      });
+
+      const result = await res.json();
+
+      if (!res.ok) {
+        setDeleteError(result.error ?? "Unable to delete staff member.");
+        return;
+      }
+
+      setDeleteOpen(false);
+      router.refresh();
+    } catch {
+      setDeleteError("This staff member has history. To preserve school records, deactivate the staff member instead.");
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -328,11 +368,105 @@ export default function StaffRow({
                     ? "Activate"
                     : "Deactivate"}
                 </button>
+
+                <button
+                  onClick={() => {
+                    setDeleteConfirmText("");
+                    setDeleteError(null);
+                    setDeleteOpen(true);
+                  }}
+                  className="flex items-center gap-1 text-xs font-medium text-red-700 hover:underline"
+                >
+                  <Trash2 size={13} />
+                  Delete
+                </button>
               </>
             )}
           </div>
         </td>
       </tr>
+
+      {deleteOpen && (
+        <tr>
+          <td colSpan={7} className="p-0">
+            <div className="fixed inset-0 z-50 overflow-y-auto bg-black/40 p-4">
+              <div className="min-h-full flex items-center justify-center py-6">
+                <div className="bg-white rounded-xl w-full max-w-md shadow-xl">
+
+                  {/* HEADER */}
+                  <div className="flex justify-between items-start p-6 border-b">
+                    <div className="flex gap-3">
+                      <div className="w-10 h-10 rounded-full bg-red-50 text-red-600 flex items-center justify-center shrink-0">
+                        <AlertTriangle size={20} />
+                      </div>
+                      <div>
+                        <h2 className="font-semibold text-lg text-gray-900">
+                          Delete {firstName} {lastName}?
+                        </h2>
+                        <p className="text-sm text-gray-500 mt-1">
+                          This permanently deletes their staff record and login access.
+                          This cannot be undone.
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setDeleteOpen(false)}
+                      className="text-gray-500 hover:text-gray-900"
+                    >
+                      <X size={20} />
+                    </button>
+                  </div>
+
+                  {/* BODY */}
+                  <div className="p-6 space-y-4">
+                    <p className="text-sm text-gray-700">
+                      Type <span className="font-semibold">{fullName}</span> to confirm.
+                    </p>
+
+                    <input
+                      type="text"
+                      value={deleteConfirmText}
+                      onChange={(e) => setDeleteConfirmText(e.target.value)}
+                      placeholder={fullName}
+                      autoFocus
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                    />
+
+                    {deleteError && (
+                      <div className="rounded-lg bg-red-50 border border-red-100 px-4 py-3 text-sm text-red-600">
+                        {deleteError}
+                      </div>
+                    )}
+
+                    <div className="flex justify-end gap-3 pt-2">
+                      <button
+                        type="button"
+                        onClick={() => setDeleteOpen(false)}
+                        className="px-5 py-2.5 rounded-lg border border-gray-300 text-sm"
+                      >
+                        Cancel
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleDelete}
+                        disabled={deleting || deleteConfirmText.trim() !== fullName}
+                        className="flex items-center gap-2 bg-red-600 text-white px-5 py-2.5 rounded-lg text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        {deleting && <Loader2 size={16} className="animate-spin" />}
+                        {deleting ? "Deleting..." : "Delete Permanently"}
+                      </button>
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+            </div>
+          </td>
+        </tr>
+      )}
 
       {open && (
         <tr>

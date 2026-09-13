@@ -1,3 +1,30 @@
+export function PageSkeleton() {
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="space-y-2">
+        <div className="skeleton h-6 w-48" />
+        <div className="skeleton h-4 w-72" />
+      </div>
+
+      {/* Stat cards row */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="bg-white rounded-xl border border-gray-100 p-4 space-y-2">
+            <div className="skeleton h-3 w-20" />
+            <div className="skeleton h-5 w-16" />
+          </div>
+        ))}
+      </div>
+
+      {/* Table / list body */}
+      <div className="bg-white rounded-xl border border-gray-100 p-4">
+        <TableSkeleton rows={6} cols={5} />
+      </div>
+    </div>
+  );
+}
+
 export function TableSkeleton({ rows = 5, cols = 5 }: { rows?: number; cols?: number }) {
   return (
     <div className="space-y-2">
