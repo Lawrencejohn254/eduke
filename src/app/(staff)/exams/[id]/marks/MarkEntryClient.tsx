@@ -31,6 +31,7 @@ export default function MarkEntryClient({
 }) {
   const [subjectId, setSubjectId] = useState(subjects[0]?.id ?? "");
   const [marks, setMarks] = useState<Record<string, string>>({});
+  const [shaking, setShaking] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState<string | null>(null);
@@ -56,6 +57,29 @@ export default function MarkEntryClient({
   useEffect(() => {
     loadExisting();
   }, [loadExisting]);
+
+  // Blocks any mark outside [0, outOf] from ever entering state — the input
+  // is controlled, so an out-of-range keystroke simply never renders, and we
+  // flash the box red + shake it so the block is obvious rather than silent.
+  function handleMarkChange(studentId: string, rawValue: string) {
+    if (rawValue === "") {
+      setMarks((prev) => ({ ...prev, [studentId]: "" }));
+      return;
+    }
+
+    const numeric = Number(rawValue);
+    if (Number.isNaN(numeric)) return;
+
+    if (numeric > outOf || numeric < 0) {
+      setShaking((prev) => ({ ...prev, [studentId]: true }));
+      window.setTimeout(() => {
+        setShaking((prev) => ({ ...prev, [studentId]: false }));
+      }, 450);
+      return;
+    }
+
+    setMarks((prev) => ({ ...prev, [studentId]: rawValue }));
+  }
 
   async function handleSave() {
     setSaving(true);
@@ -84,6 +108,18 @@ export default function MarkEntryClient({
 
   return (
     <div className="space-y-4">
+      <style>{`
+        @keyframes eduke-mark-shake {
+          10%, 90% { transform: translateX(-1px); }
+          20%, 80% { transform: translateX(2px); }
+          30%, 50%, 70% { transform: translateX(-4px); }
+          40%, 60% { transform: translateX(4px); }
+        }
+        .eduke-mark-shake {
+          animation: eduke-mark-shake 0.45s cubic-bezier(.36,.07,.19,.97) both;
+        }
+      `}</style>
+
       <Link href="/exams" className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 w-fit">
         <ArrowLeft size={14} /> Back to Exams
       </Link>
@@ -118,6 +154,7 @@ export default function MarkEntryClient({
                 const val = marks[s.id];
                 const numeric = val !== undefined && val !== "" ? Number(val) : null;
                 const { grade } = gradeFromMarks(numeric, curriculumType);
+                const isShaking = shaking[s.id];
                 return (
                   <tr key={s.id} className="border-b border-gray-50">
                     <td className="p-3 font-medium text-gray-900">{s.first_name} {s.last_name}</td>
@@ -128,9 +165,17 @@ export default function MarkEntryClient({
                         min={0}
                         max={outOf}
                         value={val ?? ""}
-                        onChange={(e) => setMarks((prev) => ({ ...prev, [s.id]: e.target.value }))}
-                        className="w-24 rounded-lg border border-gray-300 px-2 py-1.5 text-sm"
+                        onChange={(e) => handleMarkChange(s.id, e.target.value)}
+                        aria-invalid={isShaking || undefined}
+                        className={`w-24 rounded-lg border px-2 py-1.5 text-sm transition-colors ${
+                          isShaking
+                            ? "eduke-mark-shake border-red-500 ring-2 ring-red-200 text-red-600"
+                            : "border-gray-300"
+                        }`}
                       />
+                      {isShaking && (
+                        <p className="text-xs text-red-500 mt-1">Max is {outOf}</p>
+                      )}
                     </td>
                     <td className="p-3 font-semibold text-gray-700">{numeric !== null ? grade : "-"}</td>
                   </tr>

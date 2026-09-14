@@ -32,9 +32,14 @@ export default async function MyClassesPage() {
 
   const { data: subjects } = await supabase
     .from("subjects")
-    .select("id, name, class_id")
+    .select("id, name")
     .eq("school_id", profile.school_id)
     .order("name");
+
+  const { data: classSubjects } = await supabase
+    .from("class_subjects")
+    .select("class_id, subject_id")
+    .in("class_id", (classes ?? []).map((c) => c.id));
 
   const { data: streams } = await supabase
     .from("streams")
@@ -68,6 +73,7 @@ export default async function MyClassesPage() {
           termLabel={`${currentTerm.term_number} ${(currentTerm.academic_year as unknown as { year: number })?.year ?? ""}`}
           classes={classes ?? []}
           subjects={subjects ?? []}
+          classSubjects={classSubjects ?? []}
           streams={streams ?? []}
           initialAssignments={(assignments ?? []).map((a) => {
             const subject = a.subject as unknown as { name: string } | null;

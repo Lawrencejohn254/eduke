@@ -11,7 +11,17 @@ export default async function MarkEntryPage({ params }: { params: Promise<{ id: 
   const { data: exam } = await supabase.from("exams").select("id, name, class_id, out_of, class:classes(name, curriculum_type)").eq("id", id).maybeSingle();
   if (!exam) notFound();
 
-  const { data: subjects } = await supabase.from("subjects").select("id, name").eq("class_id", exam.class_id);
+  // subjects is now a school-wide catalog; which subjects this class offers
+  // comes from class_subjects (auto-populated when the class/subject was created).
+  const { data: classSubjectRows } = await supabase
+    .from("class_subjects")
+    .select("subject:subjects(id, name)")
+    .eq("class_id", exam.class_id);
+
+  const subjects = (classSubjectRows ?? [])
+    .map((r) => r.subject as unknown as { id: string; name: string } | null)
+    .filter((s): s is { id: string; name: string } => !!s)
+    .sort((a, b) => a.name.localeCompare(b.name));
 
   const { data: students } = await supabase
     .from("students")

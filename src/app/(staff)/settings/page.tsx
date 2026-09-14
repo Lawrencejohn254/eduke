@@ -113,7 +113,7 @@ export default async function SettingsPage() {
   }
 
   /* =========================
-     SUBJECTS
+     SUBJECTS (school-wide catalog)
   ========================= */
 
   const { data: subjects } = await supabase
@@ -121,13 +121,27 @@ export default async function SettingsPage() {
     .select(`
       id,
       name,
-      class_id,
       curriculum_type,
       max_marks,
       is_examinable
     `)
     .eq("school_id", profile.school_id)
     .order("name");
+
+  /* =========================
+     CLASS <-> SUBJECT LINKS
+  ========================= */
+
+  let classSubjects: { class_id: string; subject_id: string }[] = [];
+
+  if (classIds.length > 0) {
+    const { data: classSubjectsData } = await supabase
+      .from("class_subjects")
+      .select("class_id, subject_id")
+      .in("class_id", classIds);
+
+    classSubjects = classSubjectsData ?? [];
+  }
 
   const canEditSchool = [
     "principal",
@@ -341,9 +355,11 @@ export default async function SettingsPage() {
 
         <AcademicSetup
           schoolId={profile.school_id}
+          schoolCurriculum={school?.curriculum ?? null}
           classes={classes ?? []}
           streams={streams as never}
           subjects={subjects ?? []}
+          classSubjects={classSubjects}
         />
 
       </div>

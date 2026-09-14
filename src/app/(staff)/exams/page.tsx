@@ -31,10 +31,12 @@ export default async function ExamsPage({
     { data: classes },
     { data: exams },
     { data: currentTerm },
+    { data: examTypes },
   ] = await Promise.all([
     supabase.from("classes").select("id, name").eq("school_id", profile.school_id).order("name"),
     examsQuery,
     supabase.from("terms").select("id").eq("is_current", true).maybeSingle(),
+    supabase.from("exam_types").select("name").eq("school_id", profile.school_id).order("name"),
   ]);
 
   return (
@@ -52,7 +54,13 @@ export default async function ExamsPage({
       </div>
 
       <div className="flex items-center justify-between flex-wrap gap-3">
-        {canCreate && <NewExamForm classes={classes ?? []} termId={currentTerm?.id ?? null} />}
+        {canCreate && (
+          <NewExamForm
+            classes={classes ?? []}
+            termId={currentTerm?.id ?? null}
+            examTypes={(examTypes ?? []).map((t) => t.name)}
+          />
+        )}
         <ExamClassFilter classes={classes ?? []} />
       </div>
 

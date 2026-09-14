@@ -6,7 +6,8 @@ import { useRouter } from "next/navigation";
 import { Plus, Trash2, Loader2 } from "lucide-react";
 
 type ClassOption = { id: string; name: string };
-type SubjectOption = { id: string; name: string; class_id: string };
+type SubjectOption = { id: string; name: string };
+type ClassSubjectLink = { class_id: string; subject_id: string };
 type StreamOption = { id: string; name: string; class_id: string };
 type Assignment = { id: string; subjectName: string; className: string; streamName: string; termLabel: string };
 
@@ -16,6 +17,7 @@ export default function MyClassesClient({
   termLabel,
   classes,
   subjects,
+  classSubjects,
   streams,
   initialAssignments,
 }: {
@@ -24,6 +26,7 @@ export default function MyClassesClient({
   termLabel: string;
   classes: ClassOption[];
   subjects: SubjectOption[];
+  classSubjects: ClassSubjectLink[];
   streams: StreamOption[];
   initialAssignments: Assignment[];
 }) {
@@ -35,7 +38,16 @@ export default function MyClassesClient({
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
-  const subjectsForClass = useMemo(() => subjects.filter((s) => s.class_id === classId), [subjects, classId]);
+  const subjectsById = useMemo(() => new Map(subjects.map((s) => [s.id, s])), [subjects]);
+  const subjectsForClass = useMemo(
+    () =>
+      classSubjects
+        .filter((cs) => cs.class_id === classId)
+        .map((cs) => subjectsById.get(cs.subject_id))
+        .filter((s): s is SubjectOption => !!s)
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    [classSubjects, classId, subjectsById]
+  );
   const streamsForClass = useMemo(() => streams.filter((s) => s.class_id === classId), [streams, classId]);
 
   async function handleAssign() {
