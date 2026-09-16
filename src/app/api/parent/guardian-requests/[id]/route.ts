@@ -161,11 +161,15 @@ export async function PATCH(
       );
     }
 
-    // Find or create the guardian record for this phone number.
+    // Find or create the guardian record for this phone number — scoped to
+    // THIS school only. A guardian with the same phone at a different
+    // school (e.g. a test account, or a genuinely different family) must
+    // never block approval or get reused here.
     const { data: existingGuardian } = await admin
       .from("guardians")
-      .select("id, profile_id")
+      .select("id, profile_id, student_guardians!inner(students!inner(school_id))")
       .eq("phone_primary", linkRequest.phone)
+      .eq("student_guardians.students.school_id", reviewer.school_id)
       .maybeSingle();
 
     let guardianId: string;
