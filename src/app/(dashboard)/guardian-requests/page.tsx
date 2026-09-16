@@ -1,10 +1,19 @@
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getProfileOrRedirect } from "@/lib/get-profile";
+import { redirect } from "next/navigation";
 import GuardianRequestsTable from "@/components/GuardianRequestsTable";
+import AllParentsTable from "@/components/AllParentsTable";
 
+const ALLOWED_ROLES = ["principal", "deputy_principal", "super_admin"];
 
 export default async function GuardianRequestsPage() {
   const profile = await getProfileOrRedirect();
+
+  if (!ALLOWED_ROLES.includes(profile.role)) {
+    redirect("/dashboard");
+  }
+
   const supabase = await createClient();
 
   const { data: requests } = await supabase
@@ -26,23 +35,89 @@ export default async function GuardianRequestsPage() {
     .eq("status", "pending")
     .order("created_at", { ascending: false });
 
+  // All parents already linked at this school, with their children.
+  // Uses the admin client with an explicit nested school_id filter —
+  // NOT the "guardians via student" RLS policy, which currently has an
+  // unscoped bypass for staff roles (see note above). This keeps the
+  // page correct regardless of that policy.
+  const admin = createAdminClient();
+  const { data: guardiansRaw } = await admin
+    .from("guardians")
+    .select(
+      `
+      id,
+      full_name,
+      phone_primary,
+      phone_secondary,
+      email,
+      relationship,
+      profile_id,
+      student_guardians!inner (
+        is_primary,
+        fee_payer,
+        can_pickup,
+        is_verified,
+        students!inner (
+          id,
+          first_name,
+          last_name,
+          admission_number,
+          classes ( name )
+        )
+      )
+      `
+    )
+    .eq("student_guardians.students.school_id", profile.school_id)
+    .order("full_name");
+
+  const parents = (guardiansRaw ?? []).map((g) => ({
+    id: g.id,
+    fullName: g.full_name,
+    phonePrimary: g.phone_primary,
+    phoneSecondary: g.phone_secondary,
+    email: g.email,
+    relationship: g.relationship,
+    hasAccount: g.profile_id !== null,
+    children: (g.student_guardians ?? []).map((sg: any) => ({
+      studentId: sg.students.id,
+      name: `${sg.students.first_name} ${sg.students.last_name}`,
+      admissionNumber: sg.students.admission_number,
+      className: sg.students.classes?.name ?? null,
+      isPrimary: sg.is_primary,
+      feePayer: sg.fee_payer,
+      canPickup: sg.can_pickup,
+      isVerified: sg.is_verified,
+    })),
+  }));
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-10">
       <div>
         <h1 className="text-xl font-bold text-gray-900">
           Parent Account Requests
         </h1>
-
         <p className="text-sm text-gray-500">
-          Parents whose phone number didn&apos;t automatically match a student
-          record. Verify the child before approving.
+          Parents whose phone number didn&apos;t automatically match a
+          student record. Verify the child before approving.
         </p>
+        <div className="mt-4">
+          <GuardianRequestsTable
+            initialRequests={requests ?? []}
+            schoolId={profile.school_id}
+          />
+        </div>
       </div>
 
-      <GuardianRequestsTable
-        initialRequests={requests ?? []}
-        schoolId={profile.school_id}
-      />
+      <div>
+        <h2 className="text-xl font-bold text-gray-900">All Parents</h2>
+        <p className="text-sm text-gray-500">
+          Every parent linked to a student at this school, and which
+          children they&apos;re linked to.
+        </p>
+        <div className="mt-4">
+          <AllParentsTable parents={parents} />
+        </div>
+      </div>
     </div>
   );
 }
