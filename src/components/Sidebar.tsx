@@ -30,6 +30,7 @@ import {
   Receipt,
   Award,
   Home,
+  Heart,
 } from "lucide-react";
 
 type NavItem = {
@@ -107,6 +108,18 @@ const MY_CLASS_NAV_ITEM: NavItem = {
   icon: Home,
 };
 
+// Inserted only when the signed-in account has at least one VERIFIED guardian
+// link (see my_verified_children_count() RPC). This is role-independent by
+// design — a teacher, HOD, bursar, etc. who is also a verified parent/guardian
+// gets this item without any change to their staff role or permissions.
+// Hiding this link is a UX convenience only — /my-children re-checks the
+// verified link server-side (via RLS) regardless of whether this item is shown.
+const MY_CHILDREN_NAV_ITEM: NavItem = {
+  label: "My Children",
+  href: "/my-children",
+  icon: Heart,
+};
+
 /* =========================
    HOD NAVIGATION
 ========================= */
@@ -150,39 +163,55 @@ const BURSAR_NAV: NavItem[] = [
 function navForRole(
   role: string,
   studentEnrollmentEnabled: boolean,
-  hasActiveClassTeacherAssignment: boolean
+  hasActiveClassTeacherAssignment: boolean,
+  hasVerifiedChildren: boolean
 ): NavItem[] {
+  let items: NavItem[];
+
   switch (role) {
     case "principal":
     case "deputy_principal":
     case "super_admin":
     case "admin":
     case "school_admin":
-      return PRINCIPAL_NAV;
+      items = [...PRINCIPAL_NAV];
+      break;
 
     case "hod": {
       const [dashboard, profile, ...rest] = HOD_NAV;
-      const items = [dashboard, profile];
-      if (hasActiveClassTeacherAssignment) items.push(MY_CLASS_NAV_ITEM);
-      return [...items, ...rest];
+      const built = [dashboard, profile];
+      if (hasActiveClassTeacherAssignment) built.push(MY_CLASS_NAV_ITEM);
+      items = [...built, ...rest];
+      break;
     }
 
     case "teacher": {
       // isTeacher && school.student_enrollment_enabled, per spec section 3.
       // UX only — real enforcement is in middleware + RLS, not here.
       const [dashboard, profile, ...rest] = TEACHER_NAV_BASE;
-      const items = [dashboard, profile];
-      if (hasActiveClassTeacherAssignment) items.push(MY_CLASS_NAV_ITEM);
-      if (studentEnrollmentEnabled) items.push(WANAFUNZI_NAV_ITEM);
-      return [...items, ...rest];
+      const built = [dashboard, profile];
+      if (hasActiveClassTeacherAssignment) built.push(MY_CLASS_NAV_ITEM);
+      if (studentEnrollmentEnabled) built.push(WANAFUNZI_NAV_ITEM);
+      items = [...built, ...rest];
+      break;
     }
 
     case "bursar":
-      return BURSAR_NAV;
+      items = [...BURSAR_NAV];
+      break;
 
     default:
-      return TEACHER_NAV_BASE;
+      items = [...TEACHER_NAV_BASE];
   }
+
+  // Role-independent: shown for ANY signed-in account (teacher, HOD, bursar,
+  // principal, ...) that has at least one verified guardian-student link.
+  // Being staff never implies this — it strictly follows a verified link.
+  if (hasVerifiedChildren) {
+    items = [...items, MY_CHILDREN_NAV_ITEM];
+  }
+
+  return items;
 }
 
 /* =========================
@@ -193,13 +222,20 @@ export function SidebarContent({
   role,
   studentEnrollmentEnabled = false,
   hasActiveClassTeacherAssignment = false,
+  hasVerifiedChildren = false,
 }: {
   role: string;
   studentEnrollmentEnabled?: boolean;
   hasActiveClassTeacherAssignment?: boolean;
+  hasVerifiedChildren?: boolean;
 }) {
   const pathname = usePathname();
-  const items = navForRole(role, studentEnrollmentEnabled, hasActiveClassTeacherAssignment);
+  const items = navForRole(
+    role,
+    studentEnrollmentEnabled,
+    hasActiveClassTeacherAssignment,
+    hasVerifiedChildren
+  );
 
   return (
     <>
@@ -250,10 +286,12 @@ export default function Sidebar({
   role,
   studentEnrollmentEnabled = false,
   hasActiveClassTeacherAssignment = false,
+  hasVerifiedChildren = false,
 }: {
   role: string;
   studentEnrollmentEnabled?: boolean;
   hasActiveClassTeacherAssignment?: boolean;
+  hasVerifiedChildren?: boolean;
 }) {
   return (
     <aside className="hidden md:flex md:flex-col w-64 shrink-0 bg-eduke-green text-white h-screen sticky top-0">
@@ -261,6 +299,7 @@ export default function Sidebar({
         role={role}
         studentEnrollmentEnabled={studentEnrollmentEnabled}
         hasActiveClassTeacherAssignment={hasActiveClassTeacherAssignment}
+        hasVerifiedChildren={hasVerifiedChildren}
       />
     </aside>
   );

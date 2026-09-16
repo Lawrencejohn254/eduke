@@ -16,6 +16,11 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
   const supabase = await createClient();
   const canSeeFees = ["principal", "deputy_principal", "bursar", "super_admin"].includes(profile.role);
   const canManage = ["principal", "deputy_principal", "hod", "teacher", "super_admin"].includes(profile.role);
+  // NEW: only Principal/Admin can link a staff (teacher) account as a guardian.
+  // This is a UI convenience only — the real enforcement is server-side, in
+  // Supabase's admin_add_staff_guardian_link / admin_verify_guardian_link /
+  // admin_unlink_guardian RPCs, which independently re-check the caller's role.
+  const canLinkStaff = ["principal", "deputy_principal", "super_admin"].includes(profile.role);
 
   const { data: student } = await supabase
     .from("students")
@@ -151,7 +156,7 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
 
       <div className="bg-white rounded-xl border border-gray-100 p-5">
         <p className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2"><Users size={16} /> Parent / Guardian</p>
-        <LinkGuardianInline studentId={id} canEdit={canSeeFees} />
+        <LinkGuardianInline studentId={id} canEdit={canSeeFees} canLinkStaff={canLinkStaff} />
       </div>
 
       <div className="bg-white rounded-xl border border-gray-100 p-5">

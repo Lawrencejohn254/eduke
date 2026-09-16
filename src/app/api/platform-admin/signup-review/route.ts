@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { sendSchoolApprovedEmail, sendSchoolRejectedEmail } from "@/lib/emails/signup-review";
 
 export async function POST(req: NextRequest) {
   // Verify the CALLER is a genuine platform admin, using their own real session.
@@ -53,6 +54,15 @@ export async function POST(req: NextRequest) {
     if (request.auth_user_id) {
       await admin.auth.admin.deleteUser(request.auth_user_id);
     }
+
+    // Notify the applicant. Fire-and-forget-ish: errors are logged inside the helper,
+    // never surfaced to the platform admin as a failure of the rejection itself.
+    await sendSchoolRejectedEmail({
+      to: request.principal_email,
+      principalFirstName: request.principal_first_name,
+      schoolName: request.school_name,
+      reason: rejectionReason,
+    });
 
     return NextResponse.json({ success: true, status: "rejected" });
   }
@@ -135,6 +145,13 @@ export async function POST(req: NextRequest) {
     .eq("id", requestId);
 
   if (finalizeError) return NextResponse.json({ error: finalizeError.message }, { status: 500 });
+
+  // Notify the principal they're in, with a direct login link.
+  await sendSchoolApprovedEmail({
+    to: request.principal_email,
+    principalFirstName: request.principal_first_name,
+    schoolName: request.school_name,
+  });
 
   return NextResponse.json({ success: true, status: "approved", schoolId: school.id });
 }
