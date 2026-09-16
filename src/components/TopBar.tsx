@@ -12,12 +12,14 @@ export default function TopBar({
   schoolName,
   studentEnrollmentEnabled = false,
   hasActiveClassTeacherAssignment = false,
+  hasVerifiedChildren = false,
 }: {
   role: string;
   name: string;
   schoolName?: string | null;
   studentEnrollmentEnabled?: boolean;
   hasActiveClassTeacherAssignment?: boolean;
+  hasVerifiedChildren?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const router = useRouter();
@@ -57,6 +59,7 @@ export default function TopBar({
                 role={role}
                 studentEnrollmentEnabled={studentEnrollmentEnabled}
                 hasActiveClassTeacherAssignment={hasActiveClassTeacherAssignment}
+                hasVerifiedChildren={hasVerifiedChildren}
               />
             </div>
           </div>
