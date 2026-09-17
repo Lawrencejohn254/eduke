@@ -227,6 +227,9 @@ export async function PATCH(
         is_primary: (existingGuardianCount ?? 0) === 0,
         fee_payer: false,
         can_pickup: true,
+        is_verified: true,
+        verified_by: reviewer.id,
+        verified_at: new Date().toISOString(),
       });
     }
 
