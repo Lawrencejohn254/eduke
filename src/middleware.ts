@@ -101,6 +101,29 @@ export async function middleware(request: NextRequest) {
       }
     }
 
+    // ── Platform-admin gate (defense in depth) ───────────────────────────
+    // This is NOT the authoritative check — every /platform-admin layout
+    // and server action independently calls requirePlatformAdmin() via
+    // lib/supabase/platform-admin-guard.ts, which is what actually enforces
+    // authorization. This middleware check exists only to short-circuit
+    // obviously-unauthorized requests as early as possible, using the same
+    // request-scoped, RLS-bound client (never the service-role admin
+    // client, never a client-supplied role/header). Fails closed: any
+    // error from the RPC itself is treated as "not an admin".
+    const isPlatformAdminRoute = pathname.startsWith("/platform-admin");
+
+    if (user && isPlatformAdminRoute) {
+      const { data: isAdmin, error: adminCheckError } = await supabase.rpc(
+        "is_platform_admin"
+      );
+
+      if (adminCheckError || !isAdmin) {
+        const url = request.nextUrl.clone();
+        url.pathname = "/login";
+        return NextResponse.redirect(url);
+      }
+    }
+
     // ── Student enrollment gate ──────────────────────────────────────────
     // Teachers may only access /students while their school's enrollment
     // workflow is open (schools.student_enrollment_enabled). This is a UX

@@ -4,6 +4,7 @@ import { getProfileOrRedirect } from "@/lib/get-profile";
 import { redirect } from "next/navigation";
 import GuardianRequestsTable from "@/components/GuardianRequestsTable";
 import AllParentsTable from "@/components/AllParentsTable";
+import PendingVerificationsTable from "@/components/PendingVerificationsTable";
 
 const ALLOWED_ROLES = ["principal", "deputy_principal", "super_admin"];
 
@@ -90,6 +91,34 @@ export default async function GuardianRequestsPage() {
     })),
   }));
 
+    // Guardian links created via the staff-member flow start as unverified by
+  // design (admin_add_staff_guardian_link) and need an explicit verify step —
+  // this is the one place that can still legitimately produce an unverified
+  // link post-fix, so surface it instead of relying on someone remembering.
+  const { data: pendingRaw } = await supabase
+    .from("student_guardians")
+    .select(
+      `
+      id,
+      guardian:guardians(id, full_name, phone_primary, email, relationship, profile_id),
+      student:students!inner(id, first_name, last_name, admission_number, school_id, classes(name))
+      `
+    )
+    .eq("is_verified", false)
+    .eq("student.school_id", profile.school_id);
+
+  const pendingVerifications = (pendingRaw ?? []).map((row: any) => ({
+    linkId: row.id,
+    guardianName: row.guardian?.full_name ?? "Unknown",
+    guardianPhone: row.guardian?.phone_primary ?? "",
+    guardianEmail: row.guardian?.email ?? null,
+    relationship: row.guardian?.relationship ?? null,
+    hasAccount: !!row.guardian?.profile_id,
+    studentName: `${row.student?.first_name ?? ""} ${row.student?.last_name ?? ""}`.trim(),
+    admissionNumber: row.student?.admission_number ?? "",
+    className: row.student?.classes?.name ?? null,
+  }));
+
   return (
     <div className="space-y-10">
       <div>
@@ -105,6 +134,19 @@ export default async function GuardianRequestsPage() {
             initialRequests={requests ?? []}
             schoolId={profile.school_id}
           />
+        </div>
+      </div>
+
+            <div>
+        <h2 className="text-xl font-bold text-gray-900">
+          Pending Guardian Verifications
+        </h2>
+        <p className="text-sm text-gray-500">
+          Links awaiting confirmation before the guardian can see this
+          student on their own portal.
+        </p>
+        <div className="mt-4">
+          <PendingVerificationsTable pendingVerifications={pendingVerifications} />
         </div>
       </div>
 

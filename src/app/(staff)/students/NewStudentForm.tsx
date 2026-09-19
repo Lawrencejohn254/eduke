@@ -93,6 +93,10 @@ export default function NewStudentForm({ streams, schoolId }: { streams: StreamO
         guardian_id: guardianId,
         is_primary: true,
         fee_payer: true,
+        // Staff typed this guardian's details directly while creating the
+        // student record — same trust level as the "Link a Parent/Guardian"
+        // flow on the student page, which already treats this as verified.
+        is_verified: true,
       });
       if (linkError) {
         setError(`Student saved, but linking guardian failed: ${linkError.message}`);

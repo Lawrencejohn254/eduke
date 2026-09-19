@@ -5,7 +5,6 @@ import {
   type PlatformPermission,
 } from "@/lib/supabase/platform-admin-guard";
 import SignOutButton from "@/components/SignOutButton";
-import { ThemeProvider, ThemeToggle } from "@/components/platform-admin/ThemeToggle";
 
 interface NavItem {
   label: string;
@@ -87,56 +86,49 @@ export default async function PlatformAdminLayout({
   const groups = visibleGroups(admin);
 
   return (
-    <ThemeProvider>
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex">
-        <aside className="w-64 shrink-0 bg-white dark:bg-gray-950 border-r border-gray-200 dark:border-gray-800 flex flex-col">
-          <div className="px-5 py-5 border-b border-gray-200 dark:border-gray-800">
-            <p className="text-sm font-bold text-gray-900 dark:text-white">EduKe Platform</p>
-            <p className="text-xs text-gray-500 mt-0.5 truncate">{admin.email}</p>
-          </div>
-
-          <form action="/platform-admin/search" method="get" className="px-3 pt-3">
-            <input
-              type="text"
-              name="q"
-              placeholder="Search schools, staff, students…"
-              className="w-full rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 px-3 py-1.5 text-xs text-gray-900 dark:text-white placeholder:text-gray-500"
-            />
-          </form>
-
-          <nav className="flex-1 overflow-y-auto py-4 space-y-6">
-            {groups.map((group) => (
-              <div key={group.heading} className="px-3">
-                <p className="px-2 text-[10px] font-semibold tracking-wider text-gray-500 mb-1">
-                  {group.heading}
-                </p>
-                <div className="space-y-0.5">
-                  {group.items.map((item) => (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      className="block rounded-lg px-2 py-1.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white transition-colors"
-                    >
-                      {item.label}
-                    </Link>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </nav>
-
-          <div className="px-3 py-4 border-t border-gray-200 dark:border-gray-800">
-            <SignOutButton variant="dark" />
-          </div>
-        </aside>
-
-        <div className="flex-1 flex flex-col overflow-y-auto">
-          <div className="flex justify-end items-center px-6 py-3 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 shrink-0">
-            <ThemeToggle />
-          </div>
-          <main className="flex-1 p-6">{children}</main>
+    <div className="min-h-screen bg-gray-900 flex">
+      <aside className="w-64 shrink-0 bg-gray-950 border-r border-gray-800 flex flex-col">
+        <div className="px-5 py-5 border-b border-gray-800">
+          <p className="text-sm font-bold text-white">EduKe Platform</p>
+          <p className="text-xs text-gray-500 mt-0.5 truncate">{admin.email}</p>
         </div>
-      </div>
-    </ThemeProvider>
+
+        <form action="/platform-admin/search" method="get" className="px-3 pt-3">
+          <input
+            type="text"
+            name="q"
+            placeholder="Search schools, staff, students…"
+            className="w-full rounded-lg bg-gray-900 border border-gray-700 px-3 py-1.5 text-xs text-white placeholder:text-gray-500"
+          />
+        </form>
+
+        <nav className="flex-1 overflow-y-auto py-4 space-y-6">
+          {groups.map((group) => (
+            <div key={group.heading} className="px-3">
+              <p className="px-2 text-[10px] font-semibold tracking-wider text-gray-500 mb-1">
+                {group.heading}
+              </p>
+              <div className="space-y-0.5">
+                {group.items.map((item) => (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className="block rounded-lg px-2 py-1.5 text-sm text-gray-300 hover:bg-gray-800 hover:text-white transition-colors"
+                  >
+                    {item.label}
+                  </Link>
+                ))}
+              </div>
+            </div>
+          ))}
+        </nav>
+
+        <div className="px-3 py-4 border-t border-gray-800">
+          <SignOutButton variant="dark" />
+        </div>
+      </aside>
+
+      <main className="flex-1 p-6 overflow-y-auto">{children}</main>
+    </div>
   );
 }

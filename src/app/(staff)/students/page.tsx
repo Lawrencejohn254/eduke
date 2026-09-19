@@ -2,9 +2,10 @@ import { createClient } from "@/lib/supabase/server";
 import { getProfileOrRedirect } from "@/lib/get-profile";
 import { EmptyState } from "@/components/Loaders";
 import NewStudentForm from "./NewStudentForm";
+import BulkImportButton from "./BulkImportButton";
 import StudentsTable from "./StudentsTable";
 import Link from "next/link";
-import { ArrowUpCircle } from "lucide-react";
+import { ArrowUpCircle, History } from "lucide-react";
 
 export default async function StudentsPage() {
   const profile = await getProfileOrRedirect();
@@ -45,6 +46,14 @@ export default async function StudentsPage() {
               <ArrowUpCircle size={15} /> Promotions
             </Link>
           )}
+          {isAdminTier && (
+            <Link href="/students/import-history" className="flex items-center gap-1.5 bg-white border border-gray-200 text-sm font-medium px-3 py-2 rounded-lg hover:border-eduke-green transition-colors">
+              <History size={15} /> Import History
+            </Link>
+          )}
+          {/* Bulk import is scoped to principal/admin roles, unlike Add Student which teachers
+              can also use when enrollment is opened for them — see requireImportAdmin(). */}
+          {isAdminTier && <BulkImportButton />}
           {canAdd && <NewStudentForm streams={(streams ?? []) as never} schoolId={profile.school_id} />}
         </div>
       </div>

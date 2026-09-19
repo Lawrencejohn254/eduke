@@ -1,6 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { cache } from "react";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { unstable_cache } from "next/cache";
 
 export type Profile = {
   id: string;
@@ -29,6 +31,24 @@ export type Profile = {
   } | null;
 };
 
+// Runs with the service-role key — never touches cookies(), so it's safe
+// to call inside unstable_cache. Only ever called with the id the *current*
+// session resolved via auth.getUser() below, so bypassing RLS here is safe.
+async function fetchProfileRow(userId: string) {
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("profiles")
+    .select(`*, school:schools (name, student_enrollment_enabled)`)
+    .eq("id", userId)
+    .single();
+  return data;
+}
+
+const getCachedProfileRow = unstable_cache(fetchProfileRow, ["profile-row"], {
+  revalidate: 60,
+  tags: ["profiles"],
+});
+
 export const getProfileOrRedirect = cache(async (): Promise<Profile> => {
   const supabase = await createClient();
 
@@ -38,17 +58,7 @@ export const getProfileOrRedirect = cache(async (): Promise<Profile> => {
 
   if (!user) redirect("/login");
 
-  const { data: profile } = await supabase
-  .from("profiles")
-  .select(`
-    *,
-    school:schools (
-      name,
-      student_enrollment_enabled
-    )
-  `)
-  .eq("id", user.id)
-  .single();
+  const profile = await getCachedProfileRow(user.id);
 
   if (!profile) {
     // Check whether this is a pending school registration

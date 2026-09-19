@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { UserPlus, Loader2, X, ShieldAlert, ShieldCheck, BadgeCheck, Clock3 } from "lucide-react";
+import { UserPlus, Loader2, X, ShieldAlert, ShieldCheck, BadgeCheck, Clock3, Search } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 
@@ -30,14 +30,16 @@ type LinkableStaff = {
   staff_role: string;
 };
 
+type ExistingGuardianResult = {
+  id: string;
+  full_name: string;
+  phone_primary: string;
+  relationship: string | null;
+};
+
 export default function LinkGuardianInline({
   studentId,
   canEdit,
-  // Pass true only for principal / deputy_principal / super_admin viewing this
-  // student's profile. Server-side this maps to the same roles required by
-  // admin_add_staff_guardian_link / admin_verify_guardian_link / admin_unlink_guardian
-  // in Supabase — this prop is a UI convenience only, RLS + those RPCs are the
-  // real enforcement, so a non-admin sending these calls directly still fails server-side.
   canLinkStaff = false,
 }: {
   studentId: string;
@@ -55,15 +57,29 @@ export default function LinkGuardianInline({
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
   const [listError, setListError] = useState<string | null>(null);
 
-  // External guardian (existing flow — unchanged)
+  // Add guardian panel (external flow — now with search-existing OR add-new)
   const [open, setOpen] = useState(false);
+  const [guardianMode, setGuardianMode] = useState<"search" | "new">("search");
+
+  // Search-existing sub-flow
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searching, setSearching] = useState(false);
+  const [searchResults, setSearchResults] = useState<ExistingGuardianResult[]>([]);
+  const [selectedGuardian, setSelectedGuardian] = useState<ExistingGuardianResult | null>(null);
+
+  // Add-new sub-flow (existing flow, unchanged)
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [relationship, setRelationship] = useState(RELATIONSHIPS[0]);
+
+  // Shared, now editable instead of hardcoded
+  const [isPrimary, setIsPrimary] = useState(false);
+  const [feePayer, setFeePayer] = useState(true);
+
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
-  // Staff/teacher guardian (new flow — admin only)
+  // Staff/teacher guardian (unchanged)
   const [staffOpen, setStaffOpen] = useState(false);
   const [staffOptions, setStaffOptions] = useState<LinkableStaff[]>([]);
   const [loadingStaff, setLoadingStaff] = useState(false);
@@ -144,9 +160,6 @@ export default function LinkGuardianInline({
       return;
     }
 
-    // Hide staff already linked to this student so the picker can't produce a
-    // confusing duplicate-link attempt (the RPC handles duplicates safely
-    // either way, this is just UX polish).
     const alreadyLinkedProfileIds = new Set(guardians.map((g) => g.profileId).filter(Boolean));
     setStaffOptions((data ?? []).filter((s: LinkableStaff) => !alreadyLinkedProfileIds.has(s.profile_id)));
   }
@@ -156,13 +169,40 @@ export default function LinkGuardianInline({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [studentId]);
 
+  // Debounced search against EXISTING guardians. RLS ("guardians via
+  // student") already scopes this to guardians linked to a student at the
+  // caller's own school, so this naturally can't leak other schools' data —
+  // it also means a guardian who has never been linked to any student at
+  // this school won't show up here, which is correct: that case belongs in
+  // "Add new" instead.
+  useEffect(() => {
+    if (guardianMode !== "search" || searchQuery.trim().length < 2) {
+      setSearchResults([]);
+      return;
+    }
+
+    const alreadyLinkedIds = new Set(guardians.map((g) => g.guardianId));
+    const timeout = setTimeout(async () => {
+      setSearching(true);
+      const q = searchQuery.trim();
+      const { data, error } = await supabase
+        .from("guardians")
+        .select("id, full_name, phone_primary, relationship")
+        .or(`full_name.ilike.%${q}%,phone_primary.ilike.%${q}%`)
+        .limit(8);
+      setSearching(false);
+      if (!error) {
+        setSearchResults((data ?? []).filter((g) => !alreadyLinkedIds.has(g.id)));
+      }
+    }, 300);
+
+    return () => clearTimeout(timeout);
+  }, [searchQuery, guardianMode, guardians, supabase]);
+
   async function handleUnlink(guardian: LinkedGuardian) {
     setUnlinkingId(guardian.linkId);
     setListError(null);
 
-    // Staff-guardian links go through the admin RPC so profiles.guardian_id
-    // gets cleaned up correctly when this was their only verified link.
-    // Plain external guardians keep using the direct table delete as before.
     const { error } = guardian.isStaffGuardian
       ? await supabase.rpc("admin_unlink_guardian", { p_student_guardian_id: guardian.linkId })
       : await supabase.from("student_guardians").delete().eq("id", guardian.linkId);
@@ -198,56 +238,90 @@ export default function LinkGuardianInline({
     router.refresh();
   }
 
+  function openAddPanel() {
+    setGuardianMode("search");
+    setSearchQuery("");
+    setSearchResults([]);
+    setSelectedGuardian(null);
+    setName("");
+    setPhone("");
+    setRelationship(RELATIONSHIPS[0]);
+    // First guardian on a student defaults to primary; anyone added after
+    // that defaults to non-primary, but staff can override either way.
+    setIsPrimary(guardians.length === 0);
+    setFeePayer(true);
+    setMessage(null);
+    setOpen(true);
+  }
+
   async function handleLink() {
-    if (!name.trim() || !phone.trim()) return;
     setBusy(true);
     setMessage(null);
 
-    const { data: existingGuardian } = await supabase
-      .from("guardians")
-      .select("id")
-      .eq("phone_primary", phone.trim())
-      .maybeSingle();
+    try {
+      let guardianId: string | undefined;
 
-    let guardianId = existingGuardian?.id;
+      if (guardianMode === "search") {
+        if (!selectedGuardian) {
+          setMessage("Pick a guardian from the search results first.");
+          return;
+        }
+        guardianId = selectedGuardian.id;
+      } else {
+        if (!name.trim() || !phone.trim()) {
+          setMessage("Enter a name and phone number.");
+          return;
+        }
 
-    if (!guardianId) {
-      const { data: newGuardian, error: guardianError } = await supabase
-        .from("guardians")
-        .insert({ full_name: name.trim(), phone_primary: phone.trim(), relationship })
-        .select()
-        .single();
-      if (guardianError) {
-        setBusy(false);
-        setMessage(`Error: ${guardianError.message}`);
+        // Reuse by phone if a matching guardian already exists — same
+        // safety net the "search" tab makes explicit; this keeps the old
+        // flow working exactly as before if someone types instead of
+        // searching.
+        const { data: existingGuardian } = await supabase
+          .from("guardians")
+          .select("id")
+          .eq("phone_primary", phone.trim())
+          .maybeSingle();
+
+        guardianId = existingGuardian?.id;
+
+        if (!guardianId) {
+          const { data: newGuardian, error: guardianError } = await supabase
+            .from("guardians")
+            .insert({ full_name: name.trim(), phone_primary: phone.trim(), relationship })
+            .select()
+            .single();
+          if (guardianError) {
+            setMessage(`Error: ${guardianError.message}`);
+            return;
+          }
+          guardianId = newGuardian.id;
+        }
+      }
+
+      const { error: linkError } = await supabase.from("student_guardians").insert({
+        student_id: studentId,
+        guardian_id: guardianId,
+        is_primary: isPrimary,
+        fee_payer: feePayer,
+        // Staff picked or entered this guardian directly — same trust
+        // level as the rest of this flow, so it's immediately visible on
+        // that guardian's own portal, exactly like the primary parent.
+        is_verified: true,
+      });
+
+      if (linkError) {
+        setMessage(`Error: ${linkError.message}`);
         return;
       }
-      guardianId = newGuardian.id;
+
+      setMessage("Guardian linked.");
+      setOpen(false);
+      await loadGuardians();
+      router.refresh();
+    } finally {
+      setBusy(false);
     }
-
-    const { error: linkError } = await supabase.from("student_guardians").insert({
-      student_id: studentId,
-      guardian_id: guardianId,
-      is_primary: guardians.length === 0,
-      fee_payer: true,
-      // External guardians created through this flow are treated as
-      // already-established relationships, same as before this feature existed.
-      is_verified: true,
-    });
-
-    setBusy(false);
-
-    if (linkError) {
-      setMessage(`Error: ${linkError.message}`);
-      return;
-    }
-
-    setMessage("Guardian linked.");
-    setName("");
-    setPhone("");
-    setOpen(false);
-    await loadGuardians();
-    router.refresh();
   }
 
   async function handleLinkStaff() {
@@ -400,47 +474,167 @@ export default function LinkGuardianInline({
       {listError && <p className="text-xs text-red-500">{listError}</p>}
 
       {/* =====================================================
-          ADD EXTERNAL GUARDIAN (existing flow, unchanged)
+          ADD PARENT/GUARDIAN — search existing OR add new
       ====================================================== */}
 
       {canEdit &&
         (!open ? (
           <button
-            onClick={() => setOpen(true)}
+            onClick={openAddPanel}
             className="flex items-center gap-1.5 text-xs font-medium text-eduke-green hover:underline mt-2"
           >
             <UserPlus size={13} /> Link a Parent/Guardian
           </button>
         ) : (
-          <div className="mt-2 border border-gray-100 rounded-lg p-3 space-y-1.5">
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Guardian full name"
-              className="w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs"
-            />
-            <div className="flex gap-1.5">
-              <input
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="Phone (e.g. 0722000000)"
-                className="flex-1 rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs"
-              />
-              <select
-                value={relationship}
-                onChange={(e) => setRelationship(e.target.value)}
-                className="rounded-lg border border-gray-300 px-2 py-1.5 text-xs"
+          <div className="mt-2 border border-gray-100 rounded-lg p-3 space-y-2">
+            <div className="flex gap-1 bg-gray-50 rounded-lg p-0.5 w-fit">
+              <button
+                type="button"
+                onClick={() => setGuardianMode("search")}
+                className={`text-xs font-medium px-2.5 py-1 rounded-md transition-colors ${
+                  guardianMode === "search"
+                    ? "bg-white shadow-sm text-gray-900"
+                    : "text-gray-500"
+                }`}
               >
-                {RELATIONSHIPS.map((r) => (
-                  <option key={r}>{r}</option>
-                ))}
-              </select>
+                Search existing
+              </button>
+              <button
+                type="button"
+                onClick={() => setGuardianMode("new")}
+                className={`text-xs font-medium px-2.5 py-1 rounded-md transition-colors ${
+                  guardianMode === "new" ? "bg-white shadow-sm text-gray-900" : "text-gray-500"
+                }`}
+              >
+                Add new
+              </button>
             </div>
+
+            {guardianMode === "search" ? (
+              <div className="space-y-1.5">
+                <div className="relative">
+                  <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input
+                    value={searchQuery}
+                    onChange={(e) => {
+                      setSearchQuery(e.target.value);
+                      setSelectedGuardian(null);
+                    }}
+                    placeholder="Search by name or phone (e.g. sibling's guardian)..."
+                    className="w-full rounded-lg border border-gray-300 pl-7 pr-2.5 py-1.5 text-xs"
+                  />
+                </div>
+
+                {searching && (
+                  <p className="text-xs text-gray-400 flex items-center gap-1.5">
+                    <Loader2 size={11} className="animate-spin" /> Searching...
+                  </p>
+                )}
+
+                {!searching && searchQuery.trim().length >= 2 && searchResults.length === 0 && (
+                  <p className="text-xs text-gray-400">
+                    No match at this school. Try &quot;Add new&quot; instead.
+                  </p>
+                )}
+
+                {searchResults.length > 0 && !selectedGuardian && (
+                  <ul className="border border-gray-200 rounded-lg divide-y divide-gray-100 max-h-40 overflow-y-auto">
+                    {searchResults.map((r) => (
+                      <li key={r.id}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedGuardian(r);
+                            setSearchQuery(r.full_name);
+                            setSearchResults([]);
+                          }}
+                          className="w-full text-left px-2.5 py-1.5 text-xs hover:bg-gray-50"
+                        >
+                          <span className="font-medium text-gray-900">{r.full_name}</span>{" "}
+                          <span className="text-gray-400">
+                            · {r.phone_primary}
+                            {r.relationship ? ` · ${r.relationship}` : ""}
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                {selectedGuardian && (
+                  <div className="flex items-center justify-between bg-green-50 border border-green-100 rounded-lg px-2.5 py-1.5">
+                    <p className="text-xs text-gray-700">
+                      <span className="font-medium">{selectedGuardian.full_name}</span> ·{" "}
+                      {selectedGuardian.phone_primary}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedGuardian(null);
+                        setSearchQuery("");
+                      }}
+                      className="text-gray-400 hover:text-gray-600"
+                    >
+                      <X size={13} />
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <>
+                <input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Guardian full name"
+                  className="w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs"
+                />
+                <div className="flex gap-1.5">
+                  <input
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="Phone (e.g. 0722000000)"
+                    className="flex-1 rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs"
+                  />
+                  <select
+                    value={relationship}
+                    onChange={(e) => setRelationship(e.target.value)}
+                    className="rounded-lg border border-gray-300 px-2 py-1.5 text-xs"
+                  >
+                    {RELATIONSHIPS.map((r) => (
+                      <option key={r}>{r}</option>
+                    ))}
+                  </select>
+                </div>
+              </>
+            )}
+
+            <div className="flex items-center gap-4 pt-1">
+              <label className="flex items-center gap-1.5 text-xs text-gray-600">
+                <input
+                  type="checkbox"
+                  checked={isPrimary}
+                  onChange={(e) => setIsPrimary(e.target.checked)}
+                />
+                Primary contact
+              </label>
+              <label className="flex items-center gap-1.5 text-xs text-gray-600">
+                <input
+                  type="checkbox"
+                  checked={feePayer}
+                  onChange={(e) => setFeePayer(e.target.checked)}
+                />
+                Fee payer
+              </label>
+            </div>
+
             <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={handleLink}
-                disabled={busy || !name.trim() || !phone.trim()}
+                disabled={
+                  busy ||
+                  (guardianMode === "search" ? !selectedGuardian : !name.trim() || !phone.trim())
+                }
                 className="flex items-center gap-1.5 bg-eduke-green text-white text-xs font-medium px-3 py-1.5 rounded-lg disabled:opacity-50"
               >
                 {busy ? <Loader2 size={13} className="animate-spin" /> : <UserPlus size={13} />}{" "}
@@ -459,8 +653,7 @@ export default function LinkGuardianInline({
         ))}
 
       {/* =====================================================
-          LINK A STAFF MEMBER AS GUARDIAN (new — Principal/Admin only)
-          Student -> Guardians -> Add/Link Guardian -> Relationship -> Verify
+          LINK A STAFF MEMBER AS GUARDIAN (unchanged)
       ====================================================== */}
 
       {canLinkStaff &&
