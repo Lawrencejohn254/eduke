@@ -2,42 +2,47 @@ import { createClient } from "@/lib/supabase/server";
 import { getProfileOrRedirect } from "@/lib/get-profile";
 import { Library } from "lucide-react";
 import LibraryClient from "./LibraryClient";
+import { canManageLibrary } from "@/lib/library";
 
-export default async function LibraryPage() {
+export default async function LibraryPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ new?: string }>;
+}) {
   const profile = await getProfileOrRedirect();
   const supabase = await createClient();
-  const canManage = ["principal", "deputy_principal", "super_admin", "hod", "teacher"].includes(profile.role);
+  const canManage = canManageLibrary(profile.role);
+  const params = await searchParams;
+  const autoOpenAdd = params.new === "book";
 
   const [
     { data: books, error: booksError },
-    { data: students },
-    { data: borrowings },
+    { data: classes },
+    { data: bookClasses },
   ] = await Promise.all([
     supabase
       .from("books")
-      .select("id, title, author, isbn, category, total_copies, available_copies")
+      .select("id, title, author, isbn, category, publisher, publication_year, edition, language, shelf_location, cover_url, description, total_copies, available_copies, damaged_copies, lost_copies")
       .eq("school_id", profile.school_id)
       .order("title"),
     supabase
-      .from("students")
-      .select("id, first_name, last_name, admission_number")
+      .from("classes")
+      .select("id, name")
       .eq("school_id", profile.school_id)
-      .eq("status", "Active")
-      .order("first_name"),
+      .order("name"),
     supabase
-      .from("book_borrowings")
-      .select("id, borrowed_date, due_date, returned_date, status, book_id, book:books!inner(title, school_id), student:students(first_name, last_name, admission_number)")
-      .eq("book.school_id", profile.school_id)
-      .order("borrowed_date", { ascending: false }),
+      .from("book_classes")
+      .select("book_id, class_id, book:books!inner(school_id)")
+      .eq("book.school_id", profile.school_id),
   ]);
 
   return (
     <div className="space-y-4">
       <div>
         <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-          <Library size={20} /> Library
+          <Library size={20} /> Catalogue
         </h1>
-        <p className="text-sm text-gray-500">Book catalogue and borrowing records.</p>
+        <p className="text-sm text-gray-500">Book catalogue.</p>
       </div>
 
       {booksError && (
@@ -50,9 +55,10 @@ export default async function LibraryPage() {
       <LibraryClient
         schoolId={profile.school_id}
         books={books ?? []}
-        students={students ?? []}
-        borrowings={(borrowings ?? []) as never}
+        classes={classes ?? []}
+        bookClasses={(bookClasses ?? []) as never}
         canManage={canManage}
+        autoOpenAdd={autoOpenAdd}
       />
     </div>
   );

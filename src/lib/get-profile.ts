@@ -14,7 +14,9 @@ export type Profile = {
     | "hod"
     | "teacher"
     | "bursar"
-    | "parent";
+    | "parent"
+    | "librarian"
+    | "support_staff";
   first_name: string | null;
   last_name: string | null;
   phone: string | null;

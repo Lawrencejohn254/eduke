@@ -48,6 +48,14 @@ export default async function DashboardPage() {
     redirect("/bursar-dashboard");
   }
 
+  if (profile.role === "librarian") {
+    redirect("/librarian-dashboard");
+  }
+
+  if (profile.role === "support_staff") {
+    redirect("/support-dashboard");
+  }
+
   const supabase = await createClient();
 
 

@@ -31,6 +31,17 @@ import {
   Award,
   Home,
   Heart,
+  Plus,
+  BookMarked,
+  Undo2,
+  AlertTriangle,
+  CalendarClock,
+  Boxes,
+  CheckSquare,
+  Megaphone,
+  Bell,
+  Inbox,
+  LifeBuoy,
 } from "lucide-react";
 
 type NavItem = {
@@ -50,6 +61,7 @@ const PRINCIPAL_NAV: NavItem[] = [
   { label: "Students (Wanafunzi)", href: "/students", icon: Users },
   { label: "Staff", href: "/staff", icon: UserCog },
   { label: "Staff Requests", href: "/staff/requests", icon: UserPlus },
+  { label: "Staff Tasks", href: "/staff-tasks", icon: CheckSquare },
   { label: "Parent Requests", href: "/guardian-requests", icon: UserCheck },
   { label: "Staff Attendance", href: "/staff-attendance", icon: Clock },
   { label: "Attendance Reports", href: "/staff-attendance/reports", icon: FileBarChart },
@@ -65,6 +77,7 @@ const PRINCIPAL_NAV: NavItem[] = [
   { label: "Expenses", href: "/expenses", icon: Receipt },
   { label: "Reports", href: "/fees/reports", icon: BarChart3 },
   { label: "Communications", href: "/communications", icon: MessageSquare },
+  { label: "Notices", href: "/notices", icon: Megaphone },
   { label: "Library", href: "/library", icon: Library },
   { label: "Audit Log", href: "/audit-log", icon: ShieldCheck },
   { label: "Settings", href: "/settings", icon: Settings },
@@ -74,7 +87,6 @@ const PRINCIPAL_NAV: NavItem[] = [
    TEACHER NAVIGATION
 ========================= */
 
-// Base nav — no enrollment item by default (matches current behavior).
 const TEACHER_NAV_BASE: NavItem[] = [
   { label: "My Dashboard", href: "/teacher-dashboard", icon: LayoutDashboard },
   { label: "My Profile", href: "/profile", icon: CircleUser },
@@ -91,29 +103,18 @@ const TEACHER_NAV_BASE: NavItem[] = [
   { label: "Messages", href: "/communications", icon: MessageSquare },
 ];
 
-// Inserted only when student_enrollment_enabled = true for the teacher's school.
 const WANAFUNZI_NAV_ITEM: NavItem = {
   label: "Wanafunzi",
   href: "/students",
   icon: Users,
 };
 
-// Inserted only when the signed-in teacher/HOD has an active class-teacher
-// assignment for the school's current term (see getActiveClassTeacherAssignments()).
-// Hiding this link is a UX convenience only — /my-class re-checks the
-// assignment server-side regardless of whether this item is shown.
 const MY_CLASS_NAV_ITEM: NavItem = {
   label: "My Class",
   href: "/my-class",
   icon: Home,
 };
 
-// Inserted only when the signed-in account has at least one VERIFIED guardian
-// link (see my_verified_children_count() RPC). This is role-independent by
-// design — a teacher, HOD, bursar, etc. who is also a verified parent/guardian
-// gets this item without any change to their staff role or permissions.
-// Hiding this link is a UX convenience only — /my-children re-checks the
-// verified link server-side (via RLS) regardless of whether this item is shown.
 const MY_CHILDREN_NAV_ITEM: NavItem = {
   label: "My Children",
   href: "/my-children",
@@ -157,6 +158,42 @@ const BURSAR_NAV: NavItem[] = [
 ];
 
 /* =========================
+   LIBRARIAN NAVIGATION
+========================= */
+
+const LIBRARIAN_NAV: NavItem[] = [
+  { label: "Dashboard", href: "/librarian-dashboard", icon: LayoutDashboard },
+  { label: "Catalogue", href: "/library", icon: Library },
+  { label: "Add Book", href: "/library?new=book", icon: Plus },
+  { label: "Borrow Book", href: "/library/borrow", icon: BookMarked },
+  { label: "Active Borrowings", href: "/library/active-borrowings", icon: BookOpen },
+  { label: "Returned Books", href: "/library/returned-books", icon: Undo2 },
+  { label: "Overdue Books", href: "/library/overdue-books", icon: AlertTriangle },
+  { label: "Students", href: "/library/students", icon: Users },
+  { label: "Reservations", href: "/library/reservations", icon: CalendarClock },
+  { label: "Inventory", href: "/library/inventory", icon: Boxes },
+  { label: "Reports", href: "/library/reports", icon: FileBarChart },
+  { label: "Library Settings", href: "/library/settings", icon: Settings },
+  { label: "My Profile", href: "/profile", icon: CircleUser },
+];
+
+/* =========================
+   SUPPORT STAFF NAVIGATION
+========================= */
+
+const SUPPORT_STAFF_NAV: NavItem[] = [
+  { label: "Dashboard", href: "/support-dashboard", icon: LayoutDashboard },
+  { label: "Attendance", href: "/support-dashboard/attendance", icon: Clock },
+  { label: "My Tasks", href: "/support-dashboard/tasks", icon: CheckSquare },
+  { label: "School Notices", href: "/support-dashboard/notices", icon: Megaphone },
+  { label: "Notifications", href: "/support-dashboard/notifications", icon: Bell },
+  { label: "My Module", href: "/support-dashboard/module", icon: LifeBuoy },
+  { label: "Messages", href: "/support-dashboard/messages", icon: Inbox },
+  { label: "My Reports", href: "/support-dashboard/reports", icon: FileBarChart },
+  { label: "My Profile", href: "/profile", icon: CircleUser },
+];
+
+/* =========================
    ROLE NAVIGATION SELECTOR
 ========================= */
 
@@ -186,8 +223,6 @@ function navForRole(
     }
 
     case "teacher": {
-      // isTeacher && school.student_enrollment_enabled, per spec section 3.
-      // UX only — real enforcement is in middleware + RLS, not here.
       const [dashboard, profile, ...rest] = TEACHER_NAV_BASE;
       const built = [dashboard, profile];
       if (hasActiveClassTeacherAssignment) built.push(MY_CLASS_NAV_ITEM);
@@ -200,13 +235,18 @@ function navForRole(
       items = [...BURSAR_NAV];
       break;
 
+    case "librarian":
+      items = [...LIBRARIAN_NAV];
+      break;
+
+    case "support_staff":
+      items = [...SUPPORT_STAFF_NAV];
+      break;
+
     default:
       items = [...TEACHER_NAV_BASE];
   }
 
-  // Role-independent: shown for ANY signed-in account (teacher, HOD, bursar,
-  // principal, ...) that has at least one verified guardian-student link.
-  // Being staff never implies this — it strictly follows a verified link.
   if (hasVerifiedChildren) {
     items = [...items, MY_CHILDREN_NAV_ITEM];
   }
@@ -237,6 +277,16 @@ export function SidebarContent({
     hasVerifiedChildren
   );
 
+  // Pick the single longest-matching href as "active" rather than letting
+  // every ancestor route light up too (e.g. "/library" is a prefix of
+  // "/library/borrow" — without this, both would show active at once).
+  const activeHref = items.reduce<string | null>((best, item) => {
+    const matches = pathname === item.href || pathname.startsWith(item.href + "/");
+    if (!matches) return best;
+    if (!best || item.href.length > best.length) return item.href;
+    return best;
+  }, null);
+
   return (
     <>
       {/* LOGO */}
@@ -251,8 +301,7 @@ export function SidebarContent({
       {/* NAVIGATION */}
       <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-1">
         {items.map((item) => {
-          const active =
-            pathname === item.href || pathname.startsWith(item.href + "/");
+          const active = item.href === activeHref;
           const Icon = item.icon;
 
           return (

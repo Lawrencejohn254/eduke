@@ -9,7 +9,7 @@ export default async function ProfilePage() {
   const { data: staff } = profile.staff_id
     ? await supabase
         .from("staff")
-        .select("gender, department, staff_number, photo_url")
+        .select("gender, department, staff_number, photo_url, email, date_joined, status")
         .eq("id", profile.staff_id)
         .maybeSingle()
     : { data: null };
@@ -40,6 +40,9 @@ export default async function ProfilePage() {
           gender: staff?.gender ?? null,
           department: staff?.department ?? null,
           staff_number: staff?.staff_number ?? null,
+          email: staff?.email ?? null,
+          date_joined: staff?.date_joined ?? null,
+          status: staff?.status ?? null,
         }}
       />
     </div>

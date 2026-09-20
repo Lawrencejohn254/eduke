@@ -1,290 +1,309 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
-import { Plus, X, Loader2, BookMarked } from "lucide-react";
-import StatusBadge from "@/components/StatusBadge";
-import { formatDateDMY } from "@/lib/format";
+import { Plus, X, Loader2, Pencil } from "lucide-react";
 
-type Book = { id: string; title: string; author: string | null; isbn: string | null; category: string | null; total_copies: number; available_copies: number };
-type StudentOption = { id: string; first_name: string; last_name: string; admission_number: string };
-type Borrowing = {
+type Book = {
   id: string;
-  borrowed_date: string;
-  due_date: string | null;
-  returned_date: string | null;
-  status: string;
-  book_id: string;
-  book: { title: string } | null;
-  student: { first_name: string; last_name: string; admission_number: string } | null;
+  title: string;
+  author: string | null;
+  isbn: string | null;
+  category: string | null;
+  publisher: string | null;
+  publication_year: number | null;
+  edition: string | null;
+  language: string | null;
+  shelf_location: string | null;
+  cover_url: string | null;
+  description: string | null;
+  total_copies: number;
+  available_copies: number;
+  damaged_copies: number;
+  lost_copies: number;
 };
+type ClassOption = { id: string; name: string };
+type BookClassLink = { book_id: string; class_id: string };
 
 export default function LibraryClient({
   schoolId,
   books,
-  students,
-  borrowings,
+  classes,
+  bookClasses,
   canManage,
+  autoOpenAdd = false,
 }: {
   schoolId: string;
   books: Book[];
-  students: StudentOption[];
-  borrowings: Borrowing[];
+  classes: ClassOption[];
+  bookClasses: BookClassLink[];
   canManage: boolean;
+  autoOpenAdd?: boolean;
 }) {
-  const [tab, setTab] = useState<"catalogue" | "borrowings">("catalogue");
-  const [showAddBook, setShowAddBook] = useState(false);
-  const [showBorrow, setShowBorrow] = useState(false);
+  const [showBookForm, setShowBookForm] = useState(false);
+  const [editingBook, setEditingBook] = useState<Book | null>(null);
   const router = useRouter();
 
+  useEffect(() => {
+    if (autoOpenAdd && canManage) {
+      setEditingBook(null);
+      setShowBookForm(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoOpenAdd]);
+
+  const classesByBook = new Map<string, string[]>();
+  for (const link of bookClasses) {
+    const list = classesByBook.get(link.book_id) ?? [];
+    list.push(link.class_id);
+    classesByBook.set(link.book_id, list);
+  }
+  const classNameById = new Map(classes.map((c) => [c.id, c.name]));
+
+  function openAddBook() {
+    setEditingBook(null);
+    setShowBookForm(true);
+  }
+
+  function openEditBook(book: Book) {
+    setEditingBook(book);
+    setShowBookForm(true);
+  }
+
   return (
-    <div className="space-y-4">
-      <div className="flex gap-1 border-b border-gray-200">
-        <button onClick={() => setTab("catalogue")} className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px ${tab === "catalogue" ? "border-eduke-green text-eduke-green" : "border-transparent text-gray-500"}`}>
-          Catalogue ({books.length})
+    <div className="space-y-3">
+      {canManage && (
+        <button onClick={openAddBook} className="flex items-center gap-1.5 bg-eduke-green text-white text-sm font-medium px-3 py-2 rounded-lg hover:bg-eduke-green-dark transition-colors">
+          <Plus size={15} /> Add Book
         </button>
-        <button onClick={() => setTab("borrowings")} className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px ${tab === "borrowings" ? "border-eduke-green text-eduke-green" : "border-transparent text-gray-500"}`}>
-          Borrowings ({borrowings.filter((b) => b.status === "Borrowed" || b.status === "Overdue").length} active)
-        </button>
-      </div>
-
-      {tab === "catalogue" && (
-        <div className="space-y-3">
-          {canManage && (
-            <button onClick={() => setShowAddBook(true)} className="flex items-center gap-1.5 bg-eduke-green text-white text-sm font-medium px-3 py-2 rounded-lg hover:bg-eduke-green-dark transition-colors">
-              <Plus size={15} /> Add Book
-            </button>
-          )}
-          {books.length === 0 ? (
-            <p className="text-sm text-gray-400 bg-white rounded-xl border border-dashed border-gray-300 py-12 text-center">No books in the catalogue yet.</p>
-          ) : (
-            <div className="eduke-table-wrap bg-white rounded-xl border border-gray-100">
-              <table>
-                <thead>
-                  <tr className="text-left text-xs text-gray-500 border-b border-gray-100">
-                    <th className="p-3">Title</th>
-                    <th className="p-3">Author</th>
-                    <th className="p-3">Category</th>
-                    <th className="p-3">Available</th>
+      )}
+      {books.length === 0 ? (
+        <p className="text-sm text-gray-400 bg-white rounded-xl border border-dashed border-gray-300 py-12 text-center">No books in the catalogue yet.</p>
+      ) : (
+        <div className="eduke-table-wrap bg-white rounded-xl border border-gray-100">
+          <table>
+            <thead>
+              <tr className="text-left text-xs text-gray-500 border-b border-gray-100">
+                <th className="p-3">Title</th>
+                <th className="p-3">Author</th>
+                <th className="p-3">Category</th>
+                <th className="p-3">Classes</th>
+                <th className="p-3">Shelf</th>
+                <th className="p-3">Available</th>
+                <th className="p-3"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {books.map((b) => {
+                const classIds = classesByBook.get(b.id) ?? [];
+                return (
+                  <tr key={b.id} className="border-b border-gray-50">
+                    <td className="p-3 font-medium text-gray-900">
+                      <div className="flex items-center gap-2">
+                        {b.cover_url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={b.cover_url} alt="" className="w-8 h-10 object-cover rounded border border-gray-200" />
+                        ) : null}
+                        {b.title}
+                      </div>
+                    </td>
+                    <td className="p-3 text-gray-600">{b.author ?? "-"}</td>
+                    <td className="p-3 text-gray-600">{b.category ?? "-"}</td>
+                    <td className="p-3 text-gray-600 text-xs">
+                      {classIds.length === 0 ? (
+                        "-"
+                      ) : (
+                        <div className="flex flex-wrap gap-1">
+                          {classIds.map((id) => (
+                            <span key={id} className="bg-gray-100 rounded px-1.5 py-0.5">
+                              {classNameById.get(id) ?? "?"}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </td>
+                    <td className="p-3 text-gray-500 text-xs">{b.shelf_location ?? "-"}</td>
+                    <td className="p-3">
+                      <span className={b.available_copies === 0 ? "text-red-600 font-semibold" : "text-gray-700"}>
+                        {b.available_copies} / {b.total_copies}
+                      </span>
+                      {(b.damaged_copies > 0 || b.lost_copies > 0) && (
+                        <p className="text-[10px] text-gray-400">
+                          {b.damaged_copies > 0 && `${b.damaged_copies} damaged`}
+                          {b.damaged_copies > 0 && b.lost_copies > 0 && " · "}
+                          {b.lost_copies > 0 && `${b.lost_copies} lost`}
+                        </p>
+                      )}
+                    </td>
+                    <td className="p-3">
+                      {canManage && (
+                        <button onClick={() => openEditBook(b)} className="text-gray-400 hover:text-eduke-green" title="Edit book">
+                          <Pencil size={15} />
+                        </button>
+                      )}
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {books.map((b) => (
-                    <tr key={b.id} className="border-b border-gray-50">
-                      <td className="p-3 font-medium text-gray-900">{b.title}</td>
-                      <td className="p-3 text-gray-600">{b.author ?? "-"}</td>
-                      <td className="p-3 text-gray-600">{b.category ?? "-"}</td>
-                      <td className="p-3">
-                        <span className={b.available_copies === 0 ? "text-red-600 font-semibold" : "text-gray-700"}>
-                          {b.available_copies} / {b.total_copies}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       )}
 
-      {tab === "borrowings" && (
-        <div className="space-y-3">
-          {canManage && (
-            <button onClick={() => setShowBorrow(true)} className="flex items-center gap-1.5 bg-eduke-green text-white text-sm font-medium px-3 py-2 rounded-lg hover:bg-eduke-green-dark transition-colors">
-              <BookMarked size={15} /> Borrow Book
-            </button>
-          )}
-          {borrowings.length === 0 ? (
-            <p className="text-sm text-gray-400 bg-white rounded-xl border border-dashed border-gray-300 py-12 text-center">No borrowing records yet.</p>
-          ) : (
-            <div className="eduke-table-wrap bg-white rounded-xl border border-gray-100">
-              <table>
-                <thead>
-                  <tr className="text-left text-xs text-gray-500 border-b border-gray-100">
-                    <th className="p-3">Book</th>
-                    <th className="p-3">Student</th>
-                    <th className="p-3">Borrowed</th>
-                    <th className="p-3">Due</th>
-                    <th className="p-3">Status</th>
-                    <th className="p-3"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {borrowings.map((b) => (
-                    <BorrowingRow key={b.id} borrowing={b} canManage={canManage} />
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+      {showBookForm && (
+        <BookFormModal
+          schoolId={schoolId}
+          classes={classes}
+          book={editingBook}
+          initialClassIds={editingBook ? classesByBook.get(editingBook.id) ?? [] : []}
+          onClose={() => setShowBookForm(false)}
+        />
       )}
-
-      {showAddBook && <AddBookModal schoolId={schoolId} onClose={() => setShowAddBook(false)} />}
-      {showBorrow && <BorrowModal books={books} students={students} onClose={() => setShowBorrow(false)} />}
     </div>
   );
 
-  function AddBookModal({ schoolId, onClose }: { schoolId: string; onClose: () => void }) {
-    const [title, setTitle] = useState("");
-    const [author, setAuthor] = useState("");
-    const [category, setCategory] = useState("");
-    const [copies, setCopies] = useState(1);
+  function BookFormModal({
+    schoolId,
+    classes,
+    book,
+    initialClassIds,
+    onClose,
+  }: {
+    schoolId: string;
+    classes: ClassOption[];
+    book: Book | null;
+    initialClassIds: string[];
+    onClose: () => void;
+  }) {
+    const isEdit = !!book;
+    const [title, setTitle] = useState(book?.title ?? "");
+    const [isbn, setIsbn] = useState(book?.isbn ?? "");
+    const [author, setAuthor] = useState(book?.author ?? "");
+    const [publisher, setPublisher] = useState(book?.publisher ?? "");
+    const [publicationYear, setPublicationYear] = useState(book?.publication_year?.toString() ?? "");
+    const [category, setCategory] = useState(book?.category ?? "");
+    const [edition, setEdition] = useState(book?.edition ?? "");
+    const [language, setLanguage] = useState(book?.language ?? "English");
+    const [shelfLocation, setShelfLocation] = useState(book?.shelf_location ?? "");
+    const [coverUrl, setCoverUrl] = useState(book?.cover_url ?? "");
+    const [description, setDescription] = useState(book?.description ?? "");
+    const [copies, setCopies] = useState(book?.total_copies ?? 1);
+    const [selectedClassIds, setSelectedClassIds] = useState<string[]>(initialClassIds);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
+
+    function toggleClass(id: string) {
+      setSelectedClassIds((prev) => (prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id]));
+    }
 
     async function handleSubmit(e: React.FormEvent) {
       e.preventDefault();
       setSaving(true);
       setError(null);
       const supabase = createClient();
-      const { error } = await supabase.from("books").insert({
-        school_id: schoolId,
+
+      const payload = {
         title,
+        isbn: isbn || null,
         author: author || null,
+        publisher: publisher || null,
+        publication_year: publicationYear ? Number(publicationYear) : null,
         category: category || null,
-        total_copies: copies,
-        available_copies: copies,
-      });
-      setSaving(false);
-      if (error) {
-        setError(error.message);
-        return;
+        edition: edition || null,
+        language: language || null,
+        shelf_location: shelfLocation || null,
+        cover_url: coverUrl || null,
+        description: description || null,
+      };
+
+      let bookId = book?.id ?? null;
+
+      if (isEdit && book) {
+        const delta = copies - book.total_copies;
+        const newAvailable = Math.max(0, book.available_copies + delta);
+        const { error: updateError } = await supabase
+          .from("books")
+          .update({ ...payload, total_copies: copies, available_copies: newAvailable })
+          .eq("id", book.id);
+        if (updateError) {
+          setSaving(false);
+          setError(updateError.message);
+          return;
+        }
+      } else {
+        const { data: inserted, error: insertError } = await supabase
+          .from("books")
+          .insert({ school_id: schoolId, ...payload, total_copies: copies, available_copies: copies })
+          .select("id")
+          .single();
+        if (insertError || !inserted) {
+          setSaving(false);
+          setError(insertError?.message ?? "Could not create book.");
+          return;
+        }
+        bookId = inserted.id;
       }
+
+      if (bookId) {
+        await supabase.from("book_classes").delete().eq("book_id", bookId);
+        if (selectedClassIds.length > 0) {
+          await supabase.from("book_classes").insert(selectedClassIds.map((class_id) => ({ book_id: bookId, class_id })));
+        }
+      }
+
+      setSaving(false);
       onClose();
       router.refresh();
     }
 
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-        <div className="bg-white rounded-xl w-full max-w-md p-5">
+        <div className="bg-white rounded-xl w-full max-w-lg p-5 max-h-[90vh] overflow-y-auto">
           <div className="flex justify-between items-center mb-4">
-            <h2 className="font-semibold text-gray-900">Add Book</h2>
+            <h2 className="font-semibold text-gray-900">{isEdit ? "Edit Book" : "Add Book"}</h2>
             <button onClick={onClose}><X size={18} /></button>
           </div>
           <form onSubmit={handleSubmit} className="space-y-3">
             <input required placeholder="Title" value={title} onChange={(e) => setTitle(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-            <input placeholder="Author (optional)" value={author} onChange={(e) => setAuthor(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-            <input placeholder="Category (optional)" value={category} onChange={(e) => setCategory(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+            <div className="grid grid-cols-2 gap-3">
+              <input placeholder="ISBN" value={isbn} onChange={(e) => setIsbn(e.target.value)} className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+              <input placeholder="Author" value={author} onChange={(e) => setAuthor(e.target.value)} className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+              <input placeholder="Publisher" value={publisher} onChange={(e) => setPublisher(e.target.value)} className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+              <input type="number" placeholder="Publication year" value={publicationYear} onChange={(e) => setPublicationYear(e.target.value)} className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+              <input placeholder="Subject / Category" value={category} onChange={(e) => setCategory(e.target.value)} className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+              <input placeholder="Edition" value={edition} onChange={(e) => setEdition(e.target.value)} className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+              <input placeholder="Language" value={language} onChange={(e) => setLanguage(e.target.value)} className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+              <input placeholder="Shelf / Location" value={shelfLocation} onChange={(e) => setShelfLocation(e.target.value)} className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+            </div>
+            <input placeholder="Cover image URL (optional)" value={coverUrl} onChange={(e) => setCoverUrl(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+            <textarea placeholder="Description / notes" value={description} onChange={(e) => setDescription(e.target.value)} rows={2} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+
             <div>
               <label className="text-xs text-gray-500">Number of copies</label>
               <input type="number" min={1} value={copies} onChange={(e) => setCopies(Number(e.target.value))} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm mt-1" />
             </div>
+
+            <div>
+              <label className="text-xs text-gray-500">Class(es) / grade this book is intended for</label>
+              <div className="mt-1 max-h-32 overflow-y-auto border border-gray-200 rounded-lg p-2 grid grid-cols-2 gap-1">
+                {classes.length === 0 && <p className="text-xs text-gray-400 col-span-2">No classes set up yet.</p>}
+                {classes.map((c) => (
+                  <label key={c.id} className="flex items-center gap-1.5 text-xs text-gray-700">
+                    <input type="checkbox" checked={selectedClassIds.includes(c.id)} onChange={() => toggleClass(c.id)} />
+                    {c.name}
+                  </label>
+                ))}
+              </div>
+            </div>
+
             {error && <p className="text-sm text-red-600">{error}</p>}
             <button type="submit" disabled={saving} className="w-full flex items-center justify-center gap-2 bg-eduke-green text-white font-medium rounded-lg py-2.5 text-sm disabled:opacity-50">
-              {saving && <Loader2 size={16} className="animate-spin" />} Save Book
+              {saving && <Loader2 size={16} className="animate-spin" />} {isEdit ? "Save Changes" : "Save Book"}
             </button>
           </form>
         </div>
       </div>
     );
   }
-
-  function BorrowModal({ books, students, onClose }: { books: Book[]; students: StudentOption[]; onClose: () => void }) {
-    const availableBooks = books.filter((b) => b.available_copies > 0);
-    const [bookId, setBookId] = useState(availableBooks[0]?.id ?? "");
-    const [studentId, setStudentId] = useState(students[0]?.id ?? "");
-    const [dueDate, setDueDate] = useState(() => {
-      const d = new Date();
-      d.setDate(d.getDate() + 14);
-      return d.toISOString().slice(0, 10);
-    });
-    const [saving, setSaving] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-
-    async function handleSubmit(e: React.FormEvent) {
-      e.preventDefault();
-      if (!bookId) {
-        setError("No copies available to borrow.");
-        return;
-      }
-      setSaving(true);
-      setError(null);
-      const supabase = createClient();
-      const book = books.find((b) => b.id === bookId)!;
-
-      const { error: insertError } = await supabase.from("book_borrowings").insert({
-        book_id: bookId,
-        student_id: studentId,
-        due_date: dueDate,
-        status: "Borrowed",
-      });
-      if (insertError) {
-        setSaving(false);
-        setError(insertError.message);
-        return;
-      }
-      await supabase.from("books").update({ available_copies: book.available_copies - 1 }).eq("id", bookId);
-      setSaving(false);
-      onClose();
-      router.refresh();
-    }
-
-    return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-        <div className="bg-white rounded-xl w-full max-w-md p-5">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="font-semibold text-gray-900">Borrow Book</h2>
-            <button onClick={onClose}><X size={18} /></button>
-          </div>
-          <form onSubmit={handleSubmit} className="space-y-3">
-            <select value={bookId} onChange={(e) => setBookId(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm">
-              {availableBooks.length === 0 && <option value="">No copies available</option>}
-              {availableBooks.map((b) => <option key={b.id} value={b.id}>{b.title} ({b.available_copies} available)</option>)}
-            </select>
-            <select value={studentId} onChange={(e) => setStudentId(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm">
-              {students.map((s) => <option key={s.id} value={s.id}>{s.first_name} {s.last_name} ({s.admission_number})</option>)}
-            </select>
-            <div>
-              <label className="text-xs text-gray-500">Due date</label>
-              <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm mt-1" />
-            </div>
-            {error && <p className="text-sm text-red-600">{error}</p>}
-            <button type="submit" disabled={saving || !bookId} className="w-full flex items-center justify-center gap-2 bg-eduke-green text-white font-medium rounded-lg py-2.5 text-sm disabled:opacity-50">
-              {saving && <Loader2 size={16} className="animate-spin" />} Confirm Borrow
-            </button>
-          </form>
-        </div>
-      </div>
-    );
-  }
-}
-
-function BorrowingRow({ borrowing, canManage }: { borrowing: Borrowing; canManage: boolean }) {
-  const [busy, setBusy] = useState(false);
-  const router = useRouter();
-  const isOverdue = borrowing.status === "Borrowed" && borrowing.due_date && new Date(borrowing.due_date) < new Date();
-  const displayStatus = isOverdue ? "Overdue" : borrowing.status;
-
-  async function handleReturn() {
-    setBusy(true);
-    const supabase = createClient();
-    await supabase.from("book_borrowings").update({ status: "Returned", returned_date: new Date().toISOString().slice(0, 10) }).eq("id", borrowing.id);
-
-    const { data: book } = await supabase.from("books").select("id, available_copies").eq("id", borrowing.book_id).maybeSingle();
-    if (book) {
-      await supabase.from("books").update({ available_copies: book.available_copies + 1 }).eq("id", book.id);
-    }
-    setBusy(false);
-    router.refresh();
-  }
-
-  return (
-    <tr className="border-b border-gray-50">
-      <td className="p-3 font-medium text-gray-900">{borrowing.book?.title ?? "-"}</td>
-      <td className="p-3 text-gray-600">{borrowing.student ? `${borrowing.student.first_name} ${borrowing.student.last_name}` : "-"}</td>
-      <td className="p-3 text-gray-500 text-xs">{formatDateDMY(borrowing.borrowed_date)}</td>
-      <td className="p-3 text-gray-500 text-xs">{formatDateDMY(borrowing.due_date)}</td>
-      <td className="p-3"><StatusBadge status={displayStatus} /></td>
-      <td className="p-3">
-        {canManage && borrowing.status === "Borrowed" && (
-          <button onClick={handleReturn} disabled={busy} className="text-xs font-medium text-eduke-green hover:underline disabled:opacity-50">
-            {busy ? "Saving…" : "Mark Returned"}
-          </button>
-        )}
-      </td>
-    </tr>
-  );
 }

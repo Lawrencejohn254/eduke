@@ -2,6 +2,7 @@ import { getProfileOrRedirect } from "@/lib/get-profile";
 import { redirect } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
 import TopBar from "@/components/TopBar";
+import TaskChatNotifier from "@/components/TaskChatNotifier";
 import { getActiveClassTeacherAssignments } from "@/lib/class-teacher";
 import { getVerifiedChildrenCount } from "@/lib/get-verified-children-count";
 
@@ -43,6 +44,7 @@ export default async function StaffLayout({ children }: { children: React.ReactN
 />
         <main className="flex-1 p-4 md:p-6 max-w-[1400px] w-full mx-auto">{children}</main>
       </div>
+      <TaskChatNotifier profileId={profile.id} schoolId={profile.school_id} role={profile.role} staffId={profile.staff_id ?? null} />
     </div>
   );
 }

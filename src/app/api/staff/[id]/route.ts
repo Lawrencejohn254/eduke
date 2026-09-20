@@ -15,8 +15,7 @@ const STAFF_ROLES = [
 
 // `profiles.role` is a strict Postgres enum (see migrations/0001_init.sql:
 // `create type user_role as enum (...)`). Only these values can ever be
-// written there — "librarian" / "support_staff" are NOT valid portal
-// roles and will make Postgres reject the update if attempted.
+// written there.
 const PORTAL_ROLES = [
   "super_admin",
   "principal",
@@ -24,6 +23,8 @@ const PORTAL_ROLES = [
   "hod",
   "teacher",
   "bursar",
+  "librarian",
+  "support_staff",
 ];
 
 const ALLOWED_STATUSES = [

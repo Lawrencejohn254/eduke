@@ -14,5 +14,7 @@ export default async function RootPage() {
   if (profile?.role === "parent") redirect("/parent");
   if (profile?.role === "teacher" || profile?.role === "hod") redirect("/teacher-dashboard");
   if (profile?.role === "bursar") redirect("/bursar-dashboard");
+  if (profile?.role === "librarian") redirect("/librarian-dashboard");
+  if (profile?.role === "support_staff") redirect("/support-dashboard");
   redirect("/dashboard");
 }

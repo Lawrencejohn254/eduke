@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import ProfilePhotoUpload from "@/components/profile/ProfilePhotoUpload";
+import { formatDateDMY } from "@/lib/format";
 
 type Props = {
   profile: {
@@ -26,6 +27,9 @@ type Props = {
     gender: string | null;
     department: string | null;
     staff_number: string | null;
+    email: string | null;
+    date_joined: string | null;
+    status: string | null;
   };
 };
 
@@ -239,6 +243,25 @@ export default function MyProfileForm({
             value={staff.staff_number ?? "Not assigned"}
           />
 
+          <InfoRow
+            icon={<User size={16} />}
+            label="Email"
+            value={staff.email ?? "Not assigned"}
+            noCapitalize
+          />
+
+          <InfoRow
+            icon={<User size={16} />}
+            label="Date Joined"
+            value={staff.date_joined ? formatDateDMY(staff.date_joined) : "Not assigned"}
+          />
+
+          <InfoRow
+            icon={<User size={16} />}
+            label="Employment Status"
+            value={staff.status ?? "Not assigned"}
+          />
+
         </div>
       </div>
 
@@ -277,10 +300,12 @@ function InfoRow({
   icon,
   label,
   value,
+  noCapitalize = false,
 }: {
   icon: React.ReactNode;
   label: string;
   value: string;
+  noCapitalize?: boolean;
 }) {
   return (
     <div className="flex items-start gap-3">
@@ -293,7 +318,7 @@ function InfoRow({
           {label}
         </p>
 
-        <p className="text-sm font-medium text-gray-900 mt-0.5 capitalize">
+        <p className={`text-sm font-medium text-gray-900 mt-0.5 ${noCapitalize ? "" : "capitalize"}`}>
           {value}
         </p>
       </div>
