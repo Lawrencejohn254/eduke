@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { renderTemplate } from "@/lib/communications/render-template";
+import { isCronAuthorized } from "@/lib/communications/cron-auth";
 
 export async function POST(req: NextRequest) {
-  const authHeader = req.headers.get("authorization");
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!isCronAuthorized(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -65,3 +65,6 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({ dispatched: due.length });
 }
+
+// Vercel Cron only issues GET requests; pg_cron / manual calls use POST.
+export const GET = POST;

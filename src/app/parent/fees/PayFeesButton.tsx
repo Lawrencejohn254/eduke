@@ -2,12 +2,13 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { CreditCard, Loader2 } from "lucide-react";
+import { CreditCard, LoaderCircle } from "lucide-react";
 
-export default function PayFeesButton({ studentId, amount }: { studentId: string; amount: number }) {
+export default function PayFeesButton({ studentId, amount, label }: { studentId: string; amount: number; label?: string }) {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
+  // Behaviour unchanged: create the Pesapal order, remember the pending payment for the demo checkout, redirect.
   async function handlePay() {
     setLoading(true);
     const res = await fetch("/api/pesapal/initiate", {
@@ -31,11 +32,13 @@ export default function PayFeesButton({ studentId, amount }: { studentId: string
 
   return (
     <button
+      type="button"
       onClick={handlePay}
       disabled={loading}
-      className="mt-4 flex items-center gap-2 bg-eduke-green text-white text-sm font-medium px-4 py-2.5 rounded-lg hover:bg-eduke-green-dark transition-colors disabled:opacity-50"
+      className="inline-flex min-h-12 items-center justify-center gap-2 rounded-md bg-pp-green px-5 text-[0.9375rem] font-semibold text-white transition-colors hover:bg-pp-green-deep disabled:opacity-60"
     >
-      {loading ? <Loader2 size={16} className="animate-spin" /> : <CreditCard size={16} />} Pay Now via M-Pesa
+      {loading ? <LoaderCircle size={18} aria-hidden className="animate-spin" /> : <CreditCard size={18} aria-hidden />}
+      {label ?? "Pay now via M-Pesa"}
     </button>
   );
 }

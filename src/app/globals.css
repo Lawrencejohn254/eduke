@@ -17,6 +17,30 @@
   --color-eduke-ai: var(--eduke-ai);
   --color-eduke-ai-border: var(--eduke-ai-border);
   --font-sans: var(--font-inter);
+
+  /* ── Parent portal tokens (namespaced "pp" so nothing else in the app is affected) ── */
+  --color-pp-paper: #f3f5f1;
+  --color-pp-surface: #ffffff;
+  --color-pp-sunken: #eef1ec;
+  --color-pp-rule: #e1e6df;
+  --color-pp-rule-strong: #c9d1c7;
+  --color-pp-ink: #18231b;
+  --color-pp-muted: #55635a;
+  --color-pp-faint: #7b887f;
+  --color-pp-green: #1b5e20;
+  --color-pp-green-deep: #123f16;
+  --color-pp-green-tint: #e6f1e7;
+  --color-pp-gold: #f9a825;
+  --color-pp-gold-ink: #7a4f00;
+  --color-pp-gold-tint: #fdf2d9;
+  --color-pp-danger: #a4262c;
+  --color-pp-danger-tint: #fbe9ea;
+  --color-pp-info: #1f4e79;
+  --color-pp-info-tint: #e6eef6;
+  --color-pp-warn: #85480a;
+  --color-pp-warn-tint: #fdeed8;
+  --font-pp: var(--font-public-sans), ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
+  --font-display: var(--font-source-serif), "Source Serif 4", Georgia, "Times New Roman", serif;
 }
 
 body {
@@ -71,4 +95,41 @@ body {
 @keyframes skeleton-loading {
   0% { background-position: 100% 50%; }
   100% { background-position: 0 50%; }
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Parent portal helpers
+   ───────────────────────────────────────────────────────────── */
+.pp-num { font-variant-numeric: tabular-nums lining-nums; }
+
+/* One consistent, visible keyboard focus treatment across the portal */
+.pp-focus:focus-visible,
+.pp-root a:focus-visible,
+.pp-root button:focus-visible,
+.pp-root select:focus-visible,
+.pp-root input:focus-visible,
+.pp-root textarea:focus-visible,
+.pp-root [tabindex]:focus-visible {
+  outline: 2px solid var(--eduke-green);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+.pp-dark-focus a:focus-visible,
+.pp-dark-focus button:focus-visible {
+  outline: 2px solid var(--eduke-gold);
+  outline-offset: 2px;
+}
+
+/* Horizontal scroller that never lets the page itself scroll sideways */
+.pp-scroll-x { overflow-x: auto; -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain; }
+
+/* Popover / drawer entrance — only in response to a user action, and off for reduced motion */
+@keyframes pp-pop { from { opacity: 0; transform: translateY(-4px) scale(.98); } to { opacity: 1; transform: none; } }
+@keyframes pp-slide-in { from { transform: translateX(-100%); } to { transform: none; } }
+@keyframes pp-fade { from { opacity: 0; } to { opacity: 1; } }
+.pp-pop { animation: pp-pop .14s ease-out; transform-origin: top; }
+.pp-drawer { animation: pp-slide-in .2s ease-out; }
+.pp-scrim { animation: pp-fade .2s ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  .pp-pop, .pp-drawer, .pp-scrim { animation: none; }
 }

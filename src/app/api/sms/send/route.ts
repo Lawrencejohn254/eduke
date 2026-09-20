@@ -11,14 +11,23 @@ export async function POST(req: NextRequest) {
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  // Staff only. Without this any signed-in account (including a parent) could send SMS to arbitrary numbers
+  // on the school's Africa's Talking balance.
+  const { data: profile } = await supabase.from("profiles").select("school_id, role").eq("id", user.id).single();
+  if (!profile || profile.role === "parent") return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   const body = await req.json();
   const admin = createAdminClient();
 
   if (body.studentIds && body.reason === "absent") {
+    // The admin client bypasses RLS, so only accept students that belong to the caller's own school.
+    const { data: ownStudents } = await admin.from("students").select("id").in("id", body.studentIds).eq("school_id", profile.school_id);
+    const ownIds = (ownStudents ?? []).map((s: { id: string }) => s.id);
+
     const { data: guardianLinks } = await admin
       .from("student_guardians")
       .select("student:students(first_name, last_name), guardian:guardians(phone_primary)")
-      .in("student_id", body.studentIds);
+      .in("student_id", ownIds);
 
     let sent = 0;
     for (const link of guardianLinks ?? []) {

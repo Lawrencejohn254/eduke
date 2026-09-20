@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Plus, X, Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
+import { departmentOptionsForRole } from "@/lib/departments";
 
 const ROLES = [
   "teacher",
@@ -14,16 +15,6 @@ const ROLES = [
   "librarian",
   "secretary",
   "support_staff",
-];
-
-const DEPARTMENTS = [
-  "Administration",
-  "Mathematics",
-  "Sciences",
-  "Languages",
-  "Humanities",
-  "Finance",
-  "Support",
 ];
 
 const CONTRACT_TYPES = [
@@ -287,7 +278,10 @@ export default function NewStaffForm({ schoolId }: { schoolId: string }) {
 
                   <select
                     value={role}
-                    onChange={(e) => setRole(e.target.value)}
+                    onChange={(e) => {
+                      setRole(e.target.value);
+                      setDepartment("");
+                    }}
                     className="rounded-lg border border-gray-300 px-3 py-2.5 text-sm bg-white"
                   >
                     {ROLES.map((r) => (
@@ -306,7 +300,7 @@ export default function NewStaffForm({ schoolId }: { schoolId: string }) {
                   >
                     <option value="">Select department</option>
 
-                    {DEPARTMENTS.map((d) => (
+                    {departmentOptionsForRole(role).map((d) => (
                       <option key={d} value={d}>
                         {d}
                       </option>

@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
+import { departmentOptionsForRole } from "@/lib/departments";
 import Link from "next/link";
 import StatusBadge from "@/components/StatusBadge";
 import { Trash2, AlertTriangle } from "lucide-react";
@@ -25,16 +26,6 @@ const ROLES = [
   "bursar",
   "librarian",
   "support_staff",
-];
-
-const DEPARTMENTS = [
-  "Administration",
-  "Mathematics",
-  "Sciences",
-  "Languages",
-  "Humanities",
-  "Finance",
-  "Support",
 ];
 
 const STATUSES = [
@@ -582,7 +573,10 @@ export default function StaffRow({
                         <Select
                           label="Role"
                           value={rl}
-                          onChange={setRl}
+                          onChange={(v: string) => {
+                            setRl(v);
+                            setDept("");
+                          }}
                           options={ROLES}
                         />
 
@@ -592,7 +586,7 @@ export default function StaffRow({
                           onChange={setDept}
                           options={[
                             "",
-                            ...DEPARTMENTS,
+                            ...departmentOptionsForRole(rl),
                           ]}
                         />
                         <Input

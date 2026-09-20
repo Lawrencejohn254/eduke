@@ -1,110 +1,87 @@
-import { colorOf, DAY_NAMES } from "@/lib/timetable-colors";
+import { colorOf } from "@/lib/timetable-colors";
+import { formatClock, WEEKDAY_NAMES } from "@/lib/parent/time";
+import type { Lesson } from "@/lib/parent/queries";
 
-export type ClassSlot = {
-  id: string;
-  title: string;
-  description: string | null;
-  color: string | null;
-  day_of_week: number;
-  start_time: string;
-  end_time: string;
-  teacher: { first_name: string; last_name: string } | null;
-};
+export type { Lesson };
+
+/** Mon–Fri always; Saturday / Sunday only when the class actually has lessons then. */
+export function visibleDays(lessons: Lesson[]): number[] {
+  const days = [1, 2, 3, 4, 5];
+  if (lessons.some((l) => l.day === 6)) days.push(6);
+  if (lessons.some((l) => l.day === 7)) days.push(7);
+  return days;
+}
+
+export function LessonCard({ lesson, showTime = false, dim = false }: { lesson: Lesson; showTime?: boolean; dim?: boolean }) {
+  const c = colorOf(lesson.color);
+  return (
+    <div className={`rounded-md border-l-4 px-2.5 py-2 ${dim ? "opacity-60" : ""}`} style={{ backgroundColor: c.bg, borderLeftColor: c.border, color: c.text }}>
+      {showTime ? (
+        <p className="pp-num text-[0.75rem] font-medium opacity-80">
+          {formatClock(lesson.start)} – {formatClock(lesson.end)}
+        </p>
+      ) : null}
+      <p className="text-[0.875rem] leading-tight font-semibold">{lesson.title}</p>
+      {lesson.description ? <p className="mt-0.5 text-[0.75rem] leading-snug opacity-85">{lesson.description}</p> : null}
+      {lesson.teacher || lesson.room ? (
+        <p className="mt-1 text-[0.75rem] leading-snug opacity-80">{[lesson.teacher, lesson.room].filter(Boolean).join(" · ")}</p>
+      ) : null}
+    </div>
+  );
+}
 
 /**
- * Same time-rows-by-day-columns grid the principal sees in the staff Timetable page
- * (src/app/(staff)/timetable/TimetableGrid.tsx, readOnly mode), but built from every slot
- * for the student's stream (across all subject teachers) rather than one teacher's slots —
- * and with no edit/delete/add affordances at all, since a parent can only ever view this.
+ * The class's fixed weekly schedule: time rows by day columns. It's built from every slot for the child's
+ * stream (across all subject teachers) and is strictly read-only. Shown from tablet width up;
+ * phones get the day-by-day view instead.
  */
-export default function ClassTimetableGrid({ slots }: { slots: ClassSlot[] }) {
-  const timeRows = Array.from(new Set(slots.map((s) => `${s.start_time}|${s.end_time}`)))
+export default function ClassTimetableGrid({ lessons, today }: { lessons: Lesson[]; today: number }) {
+  const days = visibleDays(lessons);
+  const rows = Array.from(new Set(lessons.map((l) => `${l.start}|${l.end}`)))
     .map((k) => {
       const [start, end] = k.split("|");
       return { start, end };
     })
     .sort((a, b) => a.start.localeCompare(b.start));
 
-  function slotsAt(day: number, start: string, end: string) {
-    return slots.filter((s) => s.day_of_week === day && s.start_time === start && s.end_time === end);
-  }
-
   return (
-    <div className="border border-gray-200 rounded-xl p-4 bg-white">
-      <div className="eduke-table-wrap">
-        <table className="w-full border-collapse">
-          <thead>
-            <tr>
-              <th className="bg-gray-50 border border-gray-100 p-2 text-xs font-semibold text-gray-600 text-left w-24">
-                Time
+    <div className="pp-scroll-x">
+      <table className="w-full min-w-[46rem] table-fixed border-collapse">
+        <caption className="sr-only">Weekly class timetable</caption>
+        <thead>
+          <tr className="border-b border-pp-rule-strong">
+            <th scope="col" className="sticky left-0 w-28 bg-pp-surface px-4 py-3 text-left text-[0.8125rem] font-medium text-pp-muted">Time</th>
+            {days.map((d) => (
+              <th key={d} scope="col" className={`px-2 py-3 text-left text-[0.8125rem] font-semibold ${d === today ? "bg-pp-green-tint text-pp-green" : "text-pp-ink"}`}>
+                {WEEKDAY_NAMES[d - 1]}
+                {d === today ? <span className="ml-1.5 text-[0.6875rem] font-medium">Today</span> : null}
               </th>
-              {DAY_NAMES.map((d) => (
-                <th
-                  key={d}
-                  className="bg-gray-50 border border-gray-100 p-2 text-xs font-semibold text-gray-600 min-w-[130px]"
-                >
-                  {d}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {timeRows.length === 0 ? (
-              <tr>
-                <td colSpan={8} className="text-center text-sm text-gray-400 py-10 border border-gray-100">
-                  No timetable slots yet.
-                </td>
-              </tr>
-            ) : (
-              timeRows.map((row) => (
-                <tr key={`${row.start}-${row.end}`}>
-                  <td className="border border-gray-100 p-2 text-xs font-medium text-gray-600 align-top">
-                    {row.start.slice(0, 5)} - {row.end.slice(0, 5)}
+            ))}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-pp-rule">
+          {rows.map((row) => (
+            <tr key={`${row.start}-${row.end}`} className="align-top">
+              <th scope="row" className="sticky left-0 bg-pp-surface px-4 py-2.5 text-left">
+                <span className="pp-num block text-[0.8125rem] font-medium">{formatClock(row.start)}</span>
+                <span className="pp-num block text-[0.75rem] font-normal text-pp-muted">{formatClock(row.end)}</span>
+              </th>
+              {days.map((d) => {
+                const here = lessons.filter((l) => l.day === d && l.start === row.start && l.end === row.end);
+                return (
+                  <td key={d} className={`p-1.5 ${d === today ? "bg-pp-green-tint/30" : ""}`}>
+                    <div className="space-y-1.5">
+                      {here.map((l) => (
+                        <LessonCard key={l.id} lesson={l} />
+                      ))}
+                    </div>
                   </td>
-                  {DAY_NAMES.map((_, i) => {
-                    const day = i + 1;
-                    const daySlots = slotsAt(day, row.start, row.end);
-                    return (
-                      <td key={day} className="border border-gray-100 p-1.5 align-top">
-                        {daySlots.length === 0 ? (
-                          <div className="h-full min-h-[52px]" />
-                        ) : (
-                          <div className="space-y-1.5">
-                            {daySlots.map((slot) => {
-                              const c = colorOf(slot.color);
-                              return (
-                                <div
-                                  key={slot.id}
-                                  className="rounded-lg p-2 border"
-                                  style={{ backgroundColor: c.bg, borderColor: c.border }}
-                                >
-                                  <p className="text-xs font-semibold" style={{ color: c.text }}>
-                                    {slot.title}
-                                  </p>
-                                  {slot.description && (
-                                    <p className="text-[11px] mt-0.5" style={{ color: c.text, opacity: 0.8 }}>
-                                      {slot.description}
-                                    </p>
-                                  )}
-                                  {slot.teacher && (
-                                    <p className="text-[11px] mt-1" style={{ color: c.text, opacity: 0.7 }}>
-                                      {slot.teacher.first_name} {slot.teacher.last_name}
-                                    </p>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

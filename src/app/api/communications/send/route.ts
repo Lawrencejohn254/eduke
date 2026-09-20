@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { renderTemplate } from "@/lib/communications/render-template";
+import { processSmsQueue } from "@/lib/communications/process-sms";
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
@@ -128,7 +129,31 @@ export async function POST(req: NextRequest) {
     }
   }
   if (recipientRows.length > 0) {
-    await supabase.from("notification_recipients").insert(recipientRows);
+    const { error: recipientInsertError } = await supabase.from("notification_recipients").insert(recipientRows);
+    if (recipientInsertError) {
+      // Don't leave a "Queued" message with nobody to deliver it to.
+      await supabase.from("notifications").update({ status: "Failed" }).eq("id", notification.id);
+      return NextResponse.json({ error: "Could not queue this communication for delivery" }, { status: 500 });
+    }
+  }
+
+  // The notification starts as "Queued" only because its recipients didn't exist yet. Now that they do,
+  // let the database work out the true status: In-App-only sends are already delivered ("Sent"), sends
+  // with SMS stay "Queued" until the SMS goes out. Previously In-App-only messages stayed "Queued" forever.
+  const { error: refreshError } = await supabase.rpc("refresh_notification_status", { p_notification_id: notification.id });
+  if (refreshError && !allowedChannels.includes("SMS")) {
+    await supabase.from("notifications").update({ status: "Sent" }).eq("id", notification.id);
+  }
+
+  // Deliver the SMS right away (after the response is sent) rather than waiting for the next scheduled run.
+  if (allowedChannels.includes("SMS") && recipientRows.some((r) => r.channel === "SMS" && r.delivery_status === "Pending")) {
+    after(async () => {
+      try {
+        await processSmsQueue({ budgetMs: 6000 });
+      } catch (err) {
+        console.error("[communications] immediate SMS processing failed; the scheduled worker will retry", err);
+      }
+    });
   }
 
   return NextResponse.json({

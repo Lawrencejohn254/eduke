@@ -1,35 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createServiceClient } from "@/lib/supabase/service";
-import { sendSMS } from "@/lib/africastalking";
+import { processSmsQueue } from "@/lib/communications/process-sms";
+import { isCronAuthorized } from "@/lib/communications/cron-auth";
 
-export async function POST(req: NextRequest) {
-  const authHeader = req.headers.get("authorization");
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+// Give a large backlog room to finish in one run (Vercel plan limits still apply).
+export const maxDuration = 60;
 
-  const supabase = createServiceClient();
+async function run(req: NextRequest) {
+  if (!isCronAuthorized(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { data: batch, error } = await supabase.rpc("claim_pending_sms_recipients", { p_limit: 50 });
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  if (!batch || batch.length === 0) return NextResponse.json({ processed: 0 });
-
-  const touchedNotifications = new Set<string>();
-
-  for (const item of batch) {
-    touchedNotifications.add(item.notification_id);
-    const result = await sendSMS(item.phone, item.message);
-    await supabase.rpc("update_recipient_delivery_status", {
-    p_recipient_id: item.recipient_id,
-    p_status: result.success ? "Sent" : "Failed",
-    p_provider_message_id: null,
-    p_failure_reason: result.success ? null : "SMS provider rejected the message",
-    });
-  }
-
-  for (const notificationId of touchedNotifications) {
-    await supabase.rpc("refresh_notification_status", { p_notification_id: notificationId });
-  }
-
-  return NextResponse.json({ processed: batch.length });
+  const result = await processSmsQueue({ budgetMs: 45_000 });
+  if (result.error) return NextResponse.json({ error: result.error, ...result }, { status: 500 });
+  return NextResponse.json({ processed: result.claimed, ...result });
 }
+
+// POST: pg_cron / manual calls.  GET: Vercel Cron only issues GET requests.
+export const POST = run;
+export const GET = run;

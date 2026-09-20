@@ -27,6 +27,7 @@ export const SUPPORT_DEPARTMENT_MODULES: Record<string, { label: string; descrip
   "Secretary/Receptionist": { label: "Administration", description: "Front-office and administrative support tools." },
   "ICT Support": { label: "ICT Management", description: "Device, network and system support tools." },
   "Nurse/Health Staff": { label: "Health", description: "Student and staff health records and incident logs." },
+  "Kitchen/Catering": { label: "Kitchen", description: "Meal planning, supplies and kitchen logs." },
   Storekeeper: { label: "Inventory", description: "School stores and supplies management." },
   "Transport Officer": { label: "Transport", description: "Vehicle, route and driver management." },
   Security: { label: "Security", description: "Gate logs, visitor records and incident reports." },

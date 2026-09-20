@@ -1,27 +1,20 @@
 "use client";
 
 import { useState } from "react";
-import { Download, Printer, Loader2 } from "lucide-react";
-import { formatKES } from "@/lib/format";
+import { Download, LoaderCircle, Printer } from "lucide-react";
+import { formatKSh } from "@/lib/parent/money";
 import { printHtmlDocument, downloadHtmlAsPdf, buildFeeStructureTableHtml } from "@/lib/print";
 
 type BreakdownRow = { category: string; amount: number; mandatory: boolean; description: string | null };
 
-export default function FeeStructureCard({
-  className,
-  termLabel,
-  rows,
-}: {
-  className: string;
-  termLabel: string;
-  rows: BreakdownRow[];
-}) {
+export default function FeeStructureCard({ className, termLabel, rows }: { className: string; termLabel: string; rows: BreakdownRow[] }) {
   const [downloading, setDownloading] = useState(false);
 
   if (rows.length === 0) return null;
 
   const total = rows.reduce((s, r) => s + r.amount, 0);
 
+  // Print / PDF output is unchanged — it still uses the school's official fee-structure template.
   function html() {
     return buildFeeStructureTableHtml({
       className,
@@ -39,76 +32,49 @@ export default function FeeStructureCard({
     }
   }
 
+  const actionClass = "inline-flex min-h-10 items-center gap-1.5 rounded-md px-2.5 text-[0.8125rem] font-medium text-pp-green hover:bg-pp-green-tint disabled:opacity-50";
+
   return (
-    <div className="bg-white rounded-xl border border-gray-100 p-5">
-      <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
-        <p className="text-sm font-semibold text-gray-700">Fee Structure — {termLabel}</p>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => printHtmlDocument(`Fee Structure - ${className} - ${termLabel}`, html())}
-            className="flex items-center gap-1.5 text-xs font-medium text-gray-600 hover:text-eduke-green hover:underline"
-          >
-            <Printer size={13} /> Print
+    <section className="rounded-lg border border-pp-rule bg-pp-surface">
+      <header className="flex flex-wrap items-center justify-between gap-2 border-b border-pp-rule px-4 py-2.5 sm:px-5">
+        <div>
+          <h2 className="text-[0.9375rem] font-semibold">Fee structure</h2>
+          <p className="text-[0.8125rem] text-pp-muted">
+            {termLabel}
+            {className ? ` · ${className}` : ""}
+          </p>
+        </div>
+        <div className="flex items-center">
+          <button type="button" onClick={() => printHtmlDocument(`Fee Structure - ${className} - ${termLabel}`, html())} className={actionClass}>
+            <Printer size={15} aria-hidden /> Print
           </button>
-          <button
-            onClick={handleDownload}
-            disabled={downloading}
-            className="flex items-center gap-1.5 text-xs font-medium text-eduke-green hover:underline disabled:opacity-50"
-          >
-            {downloading ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />} Download PDF
+          <button type="button" onClick={handleDownload} disabled={downloading} className={actionClass}>
+            {downloading ? <LoaderCircle size={15} aria-hidden className="animate-spin" /> : <Download size={15} aria-hidden />} PDF
           </button>
         </div>
-      </div>
+      </header>
 
-      <div className="border border-gray-100 rounded-lg overflow-hidden">
-        <table className="w-full border-collapse">
-          <thead>
-            <tr className="bg-gray-50 border-b border-gray-100">
-              <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide p-3">
-                Category
+      <table className="w-full border-collapse">
+        <caption className="sr-only">Fee structure for {termLabel}</caption>
+        <tbody className="divide-y divide-pp-rule">
+          {rows.map((r, i) => (
+            <tr key={i}>
+              <th scope="row" className="px-4 py-3 text-left text-[0.9375rem] font-normal sm:px-5">
+                {r.category}
+                {!r.mandatory ? <span className="ml-2 rounded bg-pp-sunken px-1.5 py-0.5 text-[0.6875rem] font-medium text-pp-muted">Optional</span> : null}
+                {r.description ? <span className="mt-0.5 block text-[0.8125rem] text-pp-muted">{r.description}</span> : null}
               </th>
-              <th className="text-right text-xs font-semibold text-gray-500 uppercase tracking-wide p-3">
-                Amount
-              </th>
+              <td className="pp-num whitespace-nowrap px-4 py-3 text-right text-[0.9375rem] sm:px-5">{formatKSh(r.amount)}</td>
             </tr>
-          </thead>
-
-          <tbody>
-            {rows.map((r, i) => (
-              <tr
-                key={i}
-                className={`border-b border-gray-100 last:border-b-0 ${
-                  i % 2 === 1 ? "bg-gray-50" : ""
-                }`}
-              >
-                <td className="p-3 text-sm text-gray-700">
-                  {r.category}
-                  {!r.mandatory && (
-                    <span className="ml-1.5 text-[10px] font-medium text-gray-400 uppercase">
-                      Optional
-                    </span>
-                  )}
-                  {r.description && (
-                    <p className="text-xs text-gray-400 mt-0.5">{r.description}</p>
-                  )}
-                </td>
-                <td className="p-3 text-sm font-medium text-gray-900 text-right whitespace-nowrap">
-                  {formatKES(r.amount)}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-
-          <tfoot>
-            <tr className="bg-gray-50 border-t-2 border-gray-200">
-              <td className="p-3 text-sm font-bold text-gray-900">TOTAL</td>
-              <td className="p-3 text-sm font-bold text-gray-900 text-right whitespace-nowrap">
-                {formatKES(total)}
-              </td>
-            </tr>
-          </tfoot>
-        </table>
-      </div>
-    </div>
+          ))}
+        </tbody>
+        <tfoot>
+          <tr className="border-t-2 border-pp-rule-strong bg-pp-sunken/60">
+            <th scope="row" className="px-4 py-3 text-left text-[0.9375rem] font-semibold sm:px-5">Term total</th>
+            <td className="pp-num whitespace-nowrap px-4 py-3 text-right text-[0.9375rem] font-semibold sm:px-5">{formatKSh(total)}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </section>
   );
 }

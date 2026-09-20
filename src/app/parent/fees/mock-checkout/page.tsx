@@ -35,7 +35,7 @@ export default function MockCheckoutPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-eduke-bg px-4">
+    <div className="flex min-h-[60vh] items-center justify-center">
       <div className="w-full max-w-sm bg-white rounded-xl border border-gray-100 p-6 text-center">
         <div className="mb-3 text-xs font-semibold text-gray-400 tracking-wide">
           PESAPAL SANDBOX (DEMO — no real keys configured)

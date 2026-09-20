@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Loader2, Search, CheckCircle2, XCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { departmentOptionsForRole } from "@/lib/departments";
 
 type School = {
   id: string;
@@ -19,16 +20,6 @@ const ROLES = [
   "bursar",
   "librarian",
   "support_staff",
-];
-
-const DEPARTMENTS = [
-  "Administration",
-  "Mathematics",
-  "Sciences",
-  "Languages",
-  "Humanities",
-  "Finance",
-  "Support",
 ];
 
 export default function StaffRegistrationForm() {
@@ -387,9 +378,10 @@ export default function StaffRegistrationForm() {
 
           <select
             value={role}
-            onChange={(e) =>
-              setRole(e.target.value)
-            }
+            onChange={(e) => {
+              setRole(e.target.value);
+              setDepartment("");
+            }}
             className="rounded-lg border border-gray-300 px-3 py-2.5 text-sm"
           >
             {ROLES.map((role) => (
@@ -414,7 +406,7 @@ export default function StaffRegistrationForm() {
               Select Department
             </option>
 
-            {DEPARTMENTS.map((department) => (
+            {departmentOptionsForRole(role).map((department) => (
               <option
                 key={department}
                 value={department}
