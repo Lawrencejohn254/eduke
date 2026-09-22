@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import Script from "next/script";
 import { GraduationCap, Loader2 } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/client";
@@ -27,6 +28,15 @@ export default function CreateParentAccountPage() {
   // clickable confirmation link, not an OTP code.
   const [awaitingEmailConfirm, setAwaitingEmailConfirm] = useState(false);
   const [resending, setResending] = useState(false);
+
+  const [turnstileToken, setTurnstileToken] =
+    useState<string | null>(null);
+
+  useEffect(() => {
+    (window as any).onTurnstileVerifyParent = (token: string) => {
+      setTurnstileToken(token);
+    };
+  }, []);
 
   async function startGuardianLinking() {
     const { data: fnData, error: fnError } =
@@ -63,6 +73,19 @@ export default function CreateParentAccountPage() {
       }
       if (!phone.trim()) {
         throw new Error("Phone number is required.");
+      }
+      if (!turnstileToken) {
+        throw new Error("Please complete the verification checkbox.");
+      }
+
+      const verifyRes = await fetch("/api/auth/verify-turnstile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: turnstileToken }),
+      });
+
+      if (!verifyRes.ok) {
+        throw new Error("Verification failed. Please try again.");
       }
 
       const normalizedEmail = email.trim().toLowerCase();
@@ -139,6 +162,11 @@ export default function CreateParentAccountPage() {
 
   return (
     <div className="relative min-h-screen flex items-center justify-center px-4 overflow-hidden">
+      <Script
+        src="https://challenges.cloudflare.com/turnstile/v0/api.js"
+        strategy="lazyOnload"
+      />
+
       <TimeOfDayBackground />
 
       <div className="relative z-10 w-full max-w-sm">
@@ -272,9 +300,15 @@ export default function CreateParentAccountPage() {
               </div>
             )}
 
+            <div
+              className="cf-turnstile"
+              data-sitekey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY}
+              data-callback="onTurnstileVerifyParent"
+            />
+
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || !turnstileToken}
               className="w-full flex items-center justify-center gap-2 bg-eduke-green text-white font-medium rounded-lg py-2.5 text-sm hover:bg-eduke-green-dark transition-colors disabled:opacity-60"
             >
               {loading && <Loader2 size={16} className="animate-spin" />}

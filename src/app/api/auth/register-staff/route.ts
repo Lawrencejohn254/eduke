@@ -18,6 +18,7 @@ export async function POST(request: NextRequest) {
       tscNumber,
       contractType,
       schoolId,
+      turnstileToken,
     } = body;
 
     // Normalize email
@@ -34,6 +35,37 @@ export async function POST(request: NextRequest) {
     ) {
       return NextResponse.json(
         { error: "Please complete all required fields." },
+        { status: 400 }
+      );
+    }
+
+    // Bot check — reject if the Turnstile challenge wasn't completed or
+    // doesn't verify with Cloudflare. This is the real gate; the widget
+    // on the client is just UX, since a request can always be forged.
+    if (!turnstileToken) {
+      return NextResponse.json(
+        { error: "Please complete the verification checkbox." },
+        { status: 400 }
+      );
+    }
+
+    const turnstileRes = await fetch(
+      "https://challenges.cloudflare.com/turnstile/v0/siteverify",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          secret: process.env.TURNSTILE_SECRET_KEY,
+          response: turnstileToken,
+        }),
+      }
+    );
+
+    const turnstileOutcome = await turnstileRes.json();
+
+    if (!turnstileOutcome.success) {
+      return NextResponse.json(
+        { error: "Verification failed. Please try again." },
         { status: 400 }
       );
     }

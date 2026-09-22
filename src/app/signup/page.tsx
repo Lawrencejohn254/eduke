@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import Script from "next/script";
 import { GraduationCap, Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import TimeOfDayBackground from "@/components/TimeOfDayBackground";
@@ -15,6 +16,15 @@ export default function SignupPage() {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [turnstileToken, setTurnstileToken] =
+    useState<string | null>(null);
+
+  useEffect(() => {
+    (window as any).onTurnstileVerifySignup = (token: string) => {
+      setTurnstileToken(token);
+    };
+  }, []);
 
   const [schoolName, setSchoolName] = useState("");
   const [county, setCounty] = useState("");
@@ -47,6 +57,11 @@ export default function SignupPage() {
       return;
     }
 
+    if (!turnstileToken) {
+      setError("Please complete the verification checkbox.");
+      return;
+    }
+
     setSaving(true);
 
     try {
@@ -68,6 +83,7 @@ export default function SignupPage() {
           principalEmail,
           principalPhone,
           password,
+          turnstileToken,
         }),
       });
 
@@ -105,6 +121,11 @@ export default function SignupPage() {
 
   return (
     <div className="relative isolate min-h-screen overflow-hidden">
+      <Script
+        src="https://challenges.cloudflare.com/turnstile/v0/api.js"
+        strategy="lazyOnload"
+      />
+
       {/* BACKGROUND */}
       <div className="absolute inset-0 z-0 pointer-events-none">
         <TimeOfDayBackground />
@@ -316,10 +337,17 @@ export default function SignupPage() {
               </div>
             )}
 
+            {/* TURNSTILE WIDGET */}
+            <div
+              className="cf-turnstile"
+              data-sitekey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY}
+              data-callback="onTurnstileVerifySignup"
+            />
+
             {/* SUBMIT */}
             <button
               type="submit"
-              disabled={saving}
+              disabled={saving || !turnstileToken}
               className="w-full flex items-center justify-center gap-2 bg-eduke-green text-white font-medium rounded-lg py-3 text-sm hover:bg-eduke-green-dark transition-colors disabled:opacity-60"
             >
               {saving && (

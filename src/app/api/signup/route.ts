@@ -18,6 +18,7 @@ export async function POST(req: NextRequest) {
     principalEmail,
     principalPhone,
     password,
+    turnstileToken,
   } = body;
 
   if (!schoolName || !principalFirstName || !principalLastName || !principalEmail || !password) {
@@ -25,6 +26,30 @@ export async function POST(req: NextRequest) {
   }
   if (password.length < 8) {
     return NextResponse.json({ error: "Password must be at least 8 characters." }, { status: 400 });
+  }
+
+  // Bot check — the real gate. The widget on the client is just UX;
+  // a forged request could otherwise hit this route directly.
+  if (!turnstileToken) {
+    return NextResponse.json({ error: "Please complete the verification checkbox." }, { status: 400 });
+  }
+
+  const turnstileRes = await fetch(
+    "https://challenges.cloudflare.com/turnstile/v0/siteverify",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        secret: process.env.TURNSTILE_SECRET_KEY,
+        response: turnstileToken,
+      }),
+    }
+  );
+
+  const turnstileOutcome = await turnstileRes.json();
+
+  if (!turnstileOutcome.success) {
+    return NextResponse.json({ error: "Verification failed. Please try again." }, { status: 400 });
   }
 
   const admin = createAdminClient();
