@@ -12,6 +12,8 @@ const COLOR_MAP: Record<string, string> = {
   "Results Released": "badge-green",
   Fulfilled: "badge-green",
   Completed: "badge-green",
+  Resolved: "badge-green",
+  Open: "badge-blue",
   Returned: "badge-red",
   Failed: "badge-red",
   Absent: "badge-red",

@@ -42,14 +42,21 @@ import {
   Bell,
   Inbox,
   LifeBuoy,
+  MessagesSquare,
 } from "lucide-react";
+import ChatNavBadge from "@/components/chat/ChatNavBadge";
 
 type NavItem = {
   label: string;
   href: string;
   icon: React.ElementType;
   featured?: boolean;
+  /** show the unread-chat badge beside this item */
+  badge?: "chat";
 };
+
+/** Staff chat: available to every staff role, from super admin to support staff. */
+const CHAT_NAV_ITEM: NavItem = { label: "Chat", href: "/chat", icon: MessagesSquare, badge: "chat" };
 
 /* =========================
    PRINCIPAL NAVIGATION
@@ -247,6 +254,9 @@ function navForRole(
       items = [...TEACHER_NAV_BASE];
   }
 
+  // Chat sits right after Dashboard + My Profile for every role.
+  items = [...items.slice(0, 2), CHAT_NAV_ITEM, ...items.slice(2)];
+
   if (hasVerifiedChildren) {
     items = [...items, MY_CHILDREN_NAV_ITEM];
   }
@@ -314,6 +324,7 @@ export function SidebarContent({
             >
               <Icon size={18} className={item.featured ? "text-eduke-gold" : ""} />
               <span>{item.label}</span>
+              {item.badge === "chat" && <ChatNavBadge />}
               {item.featured && (
                 <span className="ml-auto text-[10px] bg-eduke-gold text-eduke-green-dark rounded-full px-1.5 py-0.5 font-bold">
                   AI

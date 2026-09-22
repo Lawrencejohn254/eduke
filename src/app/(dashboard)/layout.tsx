@@ -2,6 +2,7 @@ import { getProfileOrRedirect } from "@/lib/get-profile";
 import Sidebar from "@/components/Sidebar";
 import TopBar from "@/components/TopBar";
 import TaskChatNotifier from "@/components/TaskChatNotifier";
+import StaffChatNotifier from "@/components/chat/StaffChatNotifier";
 
 export default async function DashboardLayout({
   children,
@@ -38,6 +39,7 @@ export default async function DashboardLayout({
 
       </div>
       <TaskChatNotifier profileId={profile.id} schoolId={profile.school_id} role={profile.role} staffId={profile.staff_id ?? null} />
+      <StaffChatNotifier profileId={profile.id} />
     </div>
   );
 }
