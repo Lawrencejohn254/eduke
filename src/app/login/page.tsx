@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import Script from "next/script";
 import {
   GraduationCap,
   Loader2,
@@ -32,6 +33,15 @@ export default function LoginPage() {
 
   const [showLinkChildHelp, setShowLinkChildHelp] =
     useState(false);
+
+  const [turnstileToken, setTurnstileToken] =
+    useState<string | null>(null);
+
+  useEffect(() => {
+    (window as any).onTurnstileVerify = (token: string) => {
+      setTurnstileToken(token);
+    };
+  }, []);
 
   async function handleSubmit(
     e: React.FormEvent
@@ -290,6 +300,11 @@ export default function LoginPage() {
   return (
     <div className="relative min-h-screen flex items-center justify-center px-4 overflow-hidden">
 
+      <Script
+        src="https://challenges.cloudflare.com/turnstile/v0/api.js"
+        strategy="lazyOnload"
+      />
+
       <TimeOfDayBackground />
 
       <div className="relative z-10 w-full max-w-sm">
@@ -423,11 +438,20 @@ export default function LoginPage() {
           )}
 
 
+          {/* TURNSTILE WIDGET */}
+
+          <div
+            className="cf-turnstile"
+            data-sitekey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY}
+            data-callback="onTurnstileVerify"
+          />
+
+
           {/* LOGIN BUTTON */}
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || !turnstileToken}
             className="w-full flex items-center justify-center gap-2 bg-eduke-green text-white font-medium rounded-lg py-2.5 text-sm hover:bg-eduke-green-dark transition-colors disabled:opacity-60"
           >
 
