@@ -6,7 +6,6 @@ import Link from "next/link";
 import { GraduationCap, Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import TimeOfDayBackground from "@/components/TimeOfDayBackground";
-import TurnstileWidget from "@/components/TurnstileWidget";
 
 const SCHOOL_TYPES = ["Public", "Private", "Mission", "International"];
 const SCHOOL_LEVELS = ["Primary", "Secondary", "Both"];
@@ -16,9 +15,6 @@ export default function SignupPage() {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const [turnstileToken, setTurnstileToken] =
-    useState<string | null>(null);
 
   const [schoolName, setSchoolName] = useState("");
   const [county, setCounty] = useState("");
@@ -51,11 +47,6 @@ export default function SignupPage() {
       return;
     }
 
-    if (!turnstileToken) {
-      setError("Please complete the verification checkbox.");
-      return;
-    }
-
     setSaving(true);
 
     try {
@@ -77,7 +68,6 @@ export default function SignupPage() {
           principalEmail,
           principalPhone,
           password,
-          turnstileToken,
         }),
       });
 
@@ -326,13 +316,10 @@ export default function SignupPage() {
               </div>
             )}
 
-            {/* TURNSTILE WIDGET */}
-            <TurnstileWidget onVerify={setTurnstileToken} />
-
             {/* SUBMIT */}
             <button
               type="submit"
-              disabled={saving || !turnstileToken}
+              disabled={saving}
               className="w-full flex items-center justify-center gap-2 bg-eduke-green text-white font-medium rounded-lg py-3 text-sm hover:bg-eduke-green-dark transition-colors disabled:opacity-60"
             >
               {saving && (

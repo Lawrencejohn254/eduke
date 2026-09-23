@@ -12,7 +12,6 @@ import {
 
 import { createClient } from "@/lib/supabase/client";
 import TimeOfDayBackground from "@/components/TimeOfDayBackground";
-import TurnstileWidget from "@/components/TurnstileWidget";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -24,9 +23,6 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showLinkChildHelp, setShowLinkChildHelp] = useState(false);
 
-  const [turnstileToken, setTurnstileToken] =
-    useState<string | null>(null);
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
@@ -35,20 +31,6 @@ export default function LoginPage() {
     setShowLinkChildHelp(false);
 
     try {
-      if (!turnstileToken) {
-        throw new Error("Please complete the verification checkbox.");
-      }
-
-      const verifyRes = await fetch("/api/auth/verify-turnstile", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token: turnstileToken }),
-      });
-
-      if (!verifyRes.ok) {
-        throw new Error("Verification failed. Please try again.");
-      }
-
       const supabase = createClient();
       const normalizedEmail = email.trim().toLowerCase();
 
@@ -295,13 +277,10 @@ export default function LoginPage() {
             </div>
           )}
 
-          {/* TURNSTILE WIDGET */}
-          <TurnstileWidget onVerify={setTurnstileToken} />
-
           {/* LOGIN BUTTON */}
           <button
             type="submit"
-            disabled={loading || !turnstileToken}
+            disabled={loading}
             className="w-full flex items-center justify-center gap-2 bg-eduke-green text-white font-medium rounded-lg py-2.5 text-sm hover:bg-eduke-green-dark transition-colors disabled:opacity-60"
           >
             {loading && <Loader2 size={16} className="animate-spin" />}

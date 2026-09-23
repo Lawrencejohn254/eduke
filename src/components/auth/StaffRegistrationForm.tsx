@@ -5,7 +5,6 @@ import { Loader2, Search, CheckCircle2, XCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { departmentOptionsForRole } from "@/lib/departments";
-import TurnstileWidget from "@/components/TurnstileWidget";
 
 type School = {
   id: string;
@@ -48,9 +47,6 @@ export default function StaffRegistrationForm() {
   const [saving, setSaving] = useState(false);
 
   const [error, setError] = useState<string | null>(null);
-
-  const [turnstileToken, setTurnstileToken] =
-    useState<string | null>(null);
 
   const passwordsMatch = confirmPassword.length > 0 && password === confirmPassword;
   const passwordsMismatch = confirmPassword.length > 0 && password !== confirmPassword;
@@ -110,11 +106,6 @@ export default function StaffRegistrationForm() {
       return;
     }
 
-    if (!turnstileToken) {
-      setError("Please complete the verification checkbox.");
-      return;
-    }
-
     setSaving(true);
 
     try {
@@ -139,8 +130,6 @@ export default function StaffRegistrationForm() {
             contractType,
 
             schoolId: selectedSchool.id,
-
-            turnstileToken,
           }),
         }
       );
@@ -469,11 +458,9 @@ export default function StaffRegistrationForm() {
         </div>
       )}
 
-      <TurnstileWidget onVerify={setTurnstileToken} />
-
       <button
         type="submit"
-        disabled={saving || !turnstileToken}
+        disabled={saving}
         className="w-full bg-eduke-green text-white py-3 rounded-lg font-medium flex items-center justify-center gap-2 disabled:opacity-60"
       >
         {saving && (

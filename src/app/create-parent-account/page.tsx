@@ -7,7 +7,6 @@ import { GraduationCap, Loader2 } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/client";
 import TimeOfDayBackground from "@/components/TimeOfDayBackground";
-import TurnstileWidget from "@/components/TurnstileWidget";
 
 export default function CreateParentAccountPage() {
   const router = useRouter();
@@ -28,9 +27,6 @@ export default function CreateParentAccountPage() {
   // clickable confirmation link, not an OTP code.
   const [awaitingEmailConfirm, setAwaitingEmailConfirm] = useState(false);
   const [resending, setResending] = useState(false);
-
-  const [turnstileToken, setTurnstileToken] =
-    useState<string | null>(null);
 
   async function startGuardianLinking() {
     const { data: fnData, error: fnError } =
@@ -67,19 +63,6 @@ export default function CreateParentAccountPage() {
       }
       if (!phone.trim()) {
         throw new Error("Phone number is required.");
-      }
-      if (!turnstileToken) {
-        throw new Error("Please complete the verification checkbox.");
-      }
-
-      const verifyRes = await fetch("/api/auth/verify-turnstile", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token: turnstileToken }),
-      });
-
-      if (!verifyRes.ok) {
-        throw new Error("Verification failed. Please try again.");
       }
 
       const normalizedEmail = email.trim().toLowerCase();
@@ -289,11 +272,9 @@ export default function CreateParentAccountPage() {
               </div>
             )}
 
-            <TurnstileWidget onVerify={setTurnstileToken} />
-
             <button
               type="submit"
-              disabled={loading || !turnstileToken}
+              disabled={loading}
               className="w-full flex items-center justify-center gap-2 bg-eduke-green text-white font-medium rounded-lg py-2.5 text-sm hover:bg-eduke-green-dark transition-colors disabled:opacity-60"
             >
               {loading && <Loader2 size={16} className="animate-spin" />}
