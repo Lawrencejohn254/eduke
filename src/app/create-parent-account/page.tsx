@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import Script from "next/script";
 import { GraduationCap, Loader2 } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/client";
 import TimeOfDayBackground from "@/components/TimeOfDayBackground";
+import TurnstileWidget from "@/components/TurnstileWidget";
 
 export default function CreateParentAccountPage() {
   const router = useRouter();
@@ -31,12 +31,6 @@ export default function CreateParentAccountPage() {
 
   const [turnstileToken, setTurnstileToken] =
     useState<string | null>(null);
-
-  useEffect(() => {
-    (window as any).onTurnstileVerifyParent = (token: string) => {
-      setTurnstileToken(token);
-    };
-  }, []);
 
   async function startGuardianLinking() {
     const { data: fnData, error: fnError } =
@@ -162,11 +156,6 @@ export default function CreateParentAccountPage() {
 
   return (
     <div className="relative min-h-screen flex items-center justify-center px-4 overflow-hidden">
-      <Script
-        src="https://challenges.cloudflare.com/turnstile/v0/api.js"
-        strategy="lazyOnload"
-      />
-
       <TimeOfDayBackground />
 
       <div className="relative z-10 w-full max-w-sm">
@@ -300,11 +289,7 @@ export default function CreateParentAccountPage() {
               </div>
             )}
 
-            <div
-              className="cf-turnstile"
-              data-sitekey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY}
-              data-callback="onTurnstileVerifyParent"
-            />
+            <TurnstileWidget onVerify={setTurnstileToken} />
 
             <button
               type="submit"

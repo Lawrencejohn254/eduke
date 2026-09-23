@@ -4,8 +4,8 @@ import { useEffect, useState } from "react";
 import { Loader2, Search, CheckCircle2, XCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import Script from "next/script";
 import { departmentOptionsForRole } from "@/lib/departments";
+import TurnstileWidget from "@/components/TurnstileWidget";
 
 type School = {
   id: string;
@@ -51,12 +51,6 @@ export default function StaffRegistrationForm() {
 
   const [turnstileToken, setTurnstileToken] =
     useState<string | null>(null);
-
-  useEffect(() => {
-    (window as any).onTurnstileVerifyStaff = (token: string) => {
-      setTurnstileToken(token);
-    };
-  }, []);
 
   const passwordsMatch = confirmPassword.length > 0 && password === confirmPassword;
   const passwordsMismatch = confirmPassword.length > 0 && password !== confirmPassword;
@@ -172,10 +166,6 @@ export default function StaffRegistrationForm() {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-7">
-      <Script
-        src="https://challenges.cloudflare.com/turnstile/v0/api.js"
-        strategy="lazyOnload"
-      />
 
       {/* PERSONAL INFORMATION */}
       <section>
@@ -479,11 +469,7 @@ export default function StaffRegistrationForm() {
         </div>
       )}
 
-      <div
-        className="cf-turnstile"
-        data-sitekey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY}
-        data-callback="onTurnstileVerifyStaff"
-      />
+      <TurnstileWidget onVerify={setTurnstileToken} />
 
       <button
         type="submit"

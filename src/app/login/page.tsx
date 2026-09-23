@@ -1,9 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import Script from "next/script";
 import {
   GraduationCap,
   Loader2,
@@ -13,39 +12,22 @@ import {
 
 import { createClient } from "@/lib/supabase/client";
 import TimeOfDayBackground from "@/components/TimeOfDayBackground";
+import TurnstileWidget from "@/components/TurnstileWidget";
 
 export default function LoginPage() {
   const router = useRouter();
 
   const [email, setEmail] = useState("");
-
-  const [password, setPassword] =
-    useState("");
-
-  const [loading, setLoading] =
-    useState(false);
-
-  const [error, setError] =
-    useState<string | null>(null);
-
-  const [showPassword, setShowPassword] =
-    useState(false);
-
-  const [showLinkChildHelp, setShowLinkChildHelp] =
-    useState(false);
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showLinkChildHelp, setShowLinkChildHelp] = useState(false);
 
   const [turnstileToken, setTurnstileToken] =
     useState<string | null>(null);
 
-  useEffect(() => {
-    (window as any).onTurnstileVerify = (token: string) => {
-      setTurnstileToken(token);
-    };
-  }, []);
-
-  async function handleSubmit(
-    e: React.FormEvent
-  ) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
     setLoading(true);
@@ -53,48 +35,44 @@ export default function LoginPage() {
     setShowLinkChildHelp(false);
 
     try {
-      const supabase = createClient();
+      if (!turnstileToken) {
+        throw new Error("Please complete the verification checkbox.");
+      }
 
-      const normalizedEmail =
-        email.trim().toLowerCase();
+      const verifyRes = await fetch("/api/auth/verify-turnstile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: turnstileToken }),
+      });
+
+      if (!verifyRes.ok) {
+        throw new Error("Verification failed. Please try again.");
+      }
+
+      const supabase = createClient();
+      const normalizedEmail = email.trim().toLowerCase();
 
       /*
-       * ==========================================
        * STEP 1: PASSWORD AUTHENTICATION
-       * ==========================================
        */
-
-      const {
-        data,
-        error: loginError,
-      } =
+      const { data, error: loginError } =
         await supabase.auth.signInWithPassword({
           email: normalizedEmail,
           password,
         });
 
       if (loginError) {
-        throw new Error(
-          "Invalid email or password."
-        );
+        throw new Error("Invalid email or password.");
       }
 
       if (!data.user) {
-        throw new Error(
-          "Unable to log in."
-        );
+        throw new Error("Unable to log in.");
       }
 
       /*
-       * ==========================================
        * STEP 2: GET PROFILE
-       * ==========================================
        */
-
-      const {
-        data: profile,
-        error: profileError,
-      } = await supabase
+      const { data: profile, error: profileError } = await supabase
         .from("profiles")
         .select(
           `
@@ -109,31 +87,19 @@ export default function LoginPage() {
         .eq("id", data.user.id)
         .single();
 
-      /*
-       * Platform Admin
-       */
-
       if (profileError || !profile) {
         // Note: intentionally NOT signing out here. A parent who signed up
         // but never finished phone verification will have an auth session
         // with no profiles row yet — signing them out would strand them,
         // since /link-child requires an active session to resume.
         setShowLinkChildHelp(true);
-        throw new Error(
-          "Your account isn't fully set up yet."
-        );
+        throw new Error("Your account isn't fully set up yet.");
       }
 
       /*
-       * ==========================================
        * STEP 3: ACCOUNT STATUS
-       * ==========================================
        */
-
-      if (
-        profile.account_status ===
-        "pending"
-      ) {
+      if (profile.account_status === "pending") {
         await supabase.auth.signOut();
 
         if (profile.role === "parent") {
@@ -147,48 +113,29 @@ export default function LoginPage() {
         );
       }
 
-      if (
-        profile.account_status ===
-        "deactivated"
-      ) {
+      if (profile.account_status === "deactivated") {
         await supabase.auth.signOut();
-
         throw new Error(
           "Your account has been deactivated. Please contact your school administrator."
         );
       }
 
       /*
-       * ==========================================
        * STEP 4: STAFF STATUS
-       * ==========================================
        */
-
       if (profile.staff_id) {
-        const {
-          data: staffMember,
-          error: staffError,
-        } = await supabase
+        const { data: staffMember, error: staffError } = await supabase
           .from("staff")
           .select("status")
-          .eq(
-            "id",
-            profile.staff_id
-          )
+          .eq("id", profile.staff_id)
           .single();
 
         if (staffError) {
-          console.error(
-            "Staff status check error:",
-            staffError
-          );
+          console.error("Staff status check error:", staffError);
         }
 
         if (staffMember?.status) {
-          const staffStatus =
-            staffMember.status
-              .toLowerCase()
-              .trim();
+          const staffStatus = staffMember.status.toLowerCase().trim();
 
           const blockedStatuses = [
             "inactive",
@@ -197,11 +144,7 @@ export default function LoginPage() {
             "terminated",
           ];
 
-          if (
-            blockedStatuses.includes(
-              staffStatus
-            )
-          ) {
+          if (blockedStatuses.includes(staffStatus)) {
             await supabase.auth.signOut();
 
             throw new Error(
@@ -212,80 +155,39 @@ export default function LoginPage() {
       }
 
       /*
-       * ==========================================
        * STEP 5: SEND LOGIN OTP
-       * ==========================================
        */
+      const response = await fetch("/api/auth/send-login-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: data.user.id,
+          email: data.user.email ?? normalizedEmail,
+          firstName: profile.first_name ?? "",
+        }),
+      });
 
-      const response = await fetch(
-        "/api/auth/send-login-otp",
-        {
-          method: "POST",
-
-          headers: {
-            "Content-Type":
-              "application/json",
-          },
-
-          body: JSON.stringify({
-            userId: data.user.id,
-
-            email:
-              data.user.email ??
-              normalizedEmail,
-
-            firstName:
-              profile.first_name ??
-              "",
-          }),
-        }
-      );
-
-      const otpResult =
-        await response.json();
+      const otpResult = await response.json();
 
       if (!response.ok) {
-        console.error(
-          "OTP error:",
-          otpResult
-        );
-
+        console.error("OTP error:", otpResult);
         await supabase.auth.signOut();
 
         throw new Error(
-          otpResult.error ??
-            "Could not send verification code."
+          otpResult.error ?? "Could not send verification code."
         );
       }
 
       /*
-       * ==========================================
-       * STEP 6: LOG LOGIN ATTEMPT
-       *
-       * Note:
-       * We don't consider this a successful login
-       * yet. OTP verification is still pending.
-       * ==========================================
+       * STEP 6: GO TO OTP VERIFICATION
        */
-
-      /*
-       * ==========================================
-       * STEP 7: GO TO OTP VERIFICATION
-       * ==========================================
-       */
-
       router.push(
         `/verify-login?email=${encodeURIComponent(
-          data.user.email ??
-            normalizedEmail
+          data.user.email ?? normalizedEmail
         )}`
       );
-
     } catch (err) {
-      console.error(
-        "Login error:",
-        err
-      );
+      console.error("Login error:", err);
 
       setError(
         err instanceof Error
@@ -299,27 +201,13 @@ export default function LoginPage() {
 
   return (
     <div className="relative min-h-screen flex items-center justify-center px-4 overflow-hidden">
-
-      <Script
-        src="https://challenges.cloudflare.com/turnstile/v0/api.js"
-        strategy="lazyOnload"
-      />
-
       <TimeOfDayBackground />
 
       <div className="relative z-10 w-full max-w-sm">
-
         {/* LOGO */}
-
         <div className="flex flex-col items-center mb-6">
-
           <div className="bg-eduke-green rounded-2xl p-3 mb-3">
-
-            <GraduationCap
-              size={32}
-              className="text-eduke-gold"
-            />
-
+            <GraduationCap size={32} className="text-eduke-gold" />
           </div>
 
           <h1 className="text-xl font-bold text-white drop-shadow-sm">
@@ -327,24 +215,17 @@ export default function LoginPage() {
           </h1>
 
           <p className="text-sm text-white/80 text-center mt-1 drop-shadow-sm">
-            School management for Kenyan primary &amp;
-            secondary schools 🇰🇪
+            School management for Kenyan primary &amp; secondary schools 🇰🇪
           </p>
-
         </div>
 
-
         {/* LOGIN FORM */}
-
         <form
           onSubmit={handleSubmit}
           className="bg-white rounded-xl shadow-lg border border-gray-100 p-6 space-y-4"
         >
-
           {/* EMAIL */}
-
           <div>
-
             <label className="text-sm font-medium text-gray-700">
               Email
             </label>
@@ -354,22 +235,14 @@ export default function LoginPage() {
               required
               value={email}
               disabled={loading}
-              onChange={(e) =>
-                setEmail(
-                  e.target.value
-                )
-              }
+              onChange={(e) => setEmail(e.target.value)}
               placeholder="you@school.ac.ke"
               className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-eduke-green disabled:bg-gray-50"
             />
-
           </div>
 
-
           {/* PASSWORD */}
-
           <div>
-
             <div className="flex items-center justify-between">
               <label className="text-sm font-medium text-gray-700">
                 Password
@@ -389,11 +262,7 @@ export default function LoginPage() {
                 required
                 value={password}
                 disabled={loading}
-                onChange={(e) =>
-                  setPassword(
-                    e.target.value
-                  )
-                }
+                onChange={(e) => setPassword(e.target.value)}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-eduke-green disabled:bg-gray-50"
               />
 
@@ -405,23 +274,14 @@ export default function LoginPage() {
                 className="absolute inset-y-0 right-0 flex items-center px-3 text-gray-400 hover:text-gray-600 disabled:opacity-60"
                 aria-label={showPassword ? "Hide password" : "Show password"}
               >
-                {showPassword ? (
-                  <EyeOff size={16} />
-                ) : (
-                  <Eye size={16} />
-                )}
+                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </div>
-
           </div>
 
-
           {/* ERROR */}
-
           {error && (
-
             <div className="rounded-lg bg-red-50 border border-red-100 px-3 py-2.5 text-sm text-red-600">
-
               {error}
 
               {showLinkChildHelp && (
@@ -432,53 +292,26 @@ export default function LoginPage() {
                   Continue linking your child &rarr;
                 </Link>
               )}
-
             </div>
-
           )}
 
-
           {/* TURNSTILE WIDGET */}
-
-          <div
-            className="cf-turnstile"
-            data-sitekey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY}
-            data-callback="onTurnstileVerify"
-          />
-
+          <TurnstileWidget onVerify={setTurnstileToken} />
 
           {/* LOGIN BUTTON */}
-
           <button
             type="submit"
             disabled={loading || !turnstileToken}
             className="w-full flex items-center justify-center gap-2 bg-eduke-green text-white font-medium rounded-lg py-2.5 text-sm hover:bg-eduke-green-dark transition-colors disabled:opacity-60"
           >
-
-            {loading && (
-
-              <Loader2
-                size={16}
-                className="animate-spin"
-              />
-
-            )}
-
-            {loading
-              ? "Sending verification code..."
-              : "Log in"}
-
+            {loading && <Loader2 size={16} className="animate-spin" />}
+            {loading ? "Sending verification code..." : "Log in"}
           </button>
-
         </form>
 
-
         {/* REGISTRATION */}
-
         <div className="mt-6 space-y-4 text-center">
-
           <div>
-
             <p className="text-sm text-white/80 drop-shadow-sm">
               Are you a staff member?
             </p>
@@ -489,12 +322,9 @@ export default function LoginPage() {
             >
               Create Staff Account
             </Link>
-
           </div>
 
-
           <div className="border-t border-white/20 pt-4">
-
             <p className="text-sm text-white/80 drop-shadow-sm">
               Are you a parent?
             </p>
@@ -505,12 +335,9 @@ export default function LoginPage() {
             >
               Create Parent Account
             </Link>
-
           </div>
 
-
           <div className="border-t border-white/20 pt-4">
-
             <p className="text-sm text-white/80 drop-shadow-sm">
               Is your school new to EduKe?
             </p>
@@ -521,13 +348,9 @@ export default function LoginPage() {
             >
               Register Your School
             </Link>
-
           </div>
-
         </div>
-
       </div>
-
     </div>
   );
 }

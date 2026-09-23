@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import Script from "next/script";
 import { GraduationCap, Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import TimeOfDayBackground from "@/components/TimeOfDayBackground";
+import TurnstileWidget from "@/components/TurnstileWidget";
 
 const SCHOOL_TYPES = ["Public", "Private", "Mission", "International"];
 const SCHOOL_LEVELS = ["Primary", "Secondary", "Both"];
@@ -19,12 +19,6 @@ export default function SignupPage() {
 
   const [turnstileToken, setTurnstileToken] =
     useState<string | null>(null);
-
-  useEffect(() => {
-    (window as any).onTurnstileVerifySignup = (token: string) => {
-      setTurnstileToken(token);
-    };
-  }, []);
 
   const [schoolName, setSchoolName] = useState("");
   const [county, setCounty] = useState("");
@@ -121,11 +115,6 @@ export default function SignupPage() {
 
   return (
     <div className="relative isolate min-h-screen overflow-hidden">
-      <Script
-        src="https://challenges.cloudflare.com/turnstile/v0/api.js"
-        strategy="lazyOnload"
-      />
-
       {/* BACKGROUND */}
       <div className="absolute inset-0 z-0 pointer-events-none">
         <TimeOfDayBackground />
@@ -338,11 +327,7 @@ export default function SignupPage() {
             )}
 
             {/* TURNSTILE WIDGET */}
-            <div
-              className="cf-turnstile"
-              data-sitekey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY}
-              data-callback="onTurnstileVerifySignup"
-            />
+            <TurnstileWidget onVerify={setTurnstileToken} />
 
             {/* SUBMIT */}
             <button
