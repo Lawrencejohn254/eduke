@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 declare global {
   interface Window {
@@ -59,11 +59,43 @@ export default function TurnstileWidget({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const widgetIdRef = useRef<string | null>(null);
 
+  // Shown when verification has been sitting unresolved for a while —
+  // common on slow mobile data, where the challenge can silently stall.
+  const [showStuckHelp, setShowStuckHelp] = useState(false);
+  const stuckTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Keep the latest callback in a ref so the render effect below doesn't
   // need onVerify as a dependency — that would re-render the widget on
   // every parent re-render if an inline arrow function is passed in.
   const onVerifyRef = useRef(onVerify);
   onVerifyRef.current = onVerify;
+
+  function startStuckTimer() {
+    if (stuckTimerRef.current) clearTimeout(stuckTimerRef.current);
+    setShowStuckHelp(false);
+
+    // If nothing has resolved (success or error) within 12s, mobile
+    // networks are the usual reason — surface a manual retry instead of
+    // leaving the visitor staring at a spinner indefinitely.
+    stuckTimerRef.current = setTimeout(() => {
+      setShowStuckHelp(true);
+    }, 12000);
+  }
+
+  function clearStuckTimer() {
+    if (stuckTimerRef.current) clearTimeout(stuckTimerRef.current);
+    setShowStuckHelp(false);
+  }
+
+  function handleManualRetry() {
+    clearStuckTimer();
+    onVerifyRef.current(null);
+
+    if (widgetIdRef.current && window.turnstile) {
+      window.turnstile.reset(widgetIdRef.current);
+      startStuckTimer();
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -82,14 +114,43 @@ export default function TurnstileWidget({
       try {
         widgetIdRef.current = window.turnstile.render(containerRef.current, {
           sitekey: process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY,
-          callback: (token: string) => onVerifyRef.current(token),
-          "expired-callback": () => onVerifyRef.current(null),
-          "error-callback": () => onVerifyRef.current(null),
-          // Cloudflare tokens are valid for ~5 minutes. "auto" makes the
-          // widget silently fetch a fresh token shortly before the old one
-          // expires, in the background, with no reload and no user action.
+
+          callback: (token: string) => {
+            clearStuckTimer();
+            onVerifyRef.current(token);
+          },
+          "expired-callback": () => {
+            onVerifyRef.current(null);
+            startStuckTimer();
+          },
+          "error-callback": () => {
+            onVerifyRef.current(null);
+            startStuckTimer();
+          },
+          // Fires specifically when an interactive challenge (the part
+          // most likely to stall on slow mobile connections) times out.
+          "timeout-callback": () => {
+            onVerifyRef.current(null);
+            if (widgetIdRef.current && window.turnstile) {
+              window.turnstile.reset(widgetIdRef.current);
+            }
+            startStuckTimer();
+          },
+
+          // Cloudflare tokens are valid for ~5 minutes. "auto" silently
+          // fetches a fresh token shortly before the old one expires, in
+          // the background, with no reload and no user action needed.
           "refresh-expired": "auto",
+          // Same idea, but for a stalled interactive challenge itself.
+          "refresh-timeout": "auto",
+
+          // Retry failed/slow requests automatically, faster than the
+          // 8s default — helps on flaky mobile connections.
+          retry: "auto",
+          "retry-interval": 3000,
         });
+
+        startStuckTimer();
       } catch {
         // container not ready yet, or script briefly unavailable —
         // the retry interval below will pick this up on the next tick
@@ -118,6 +179,7 @@ export default function TurnstileWidget({
       cancelled = true;
 
       if (retryInterval) clearInterval(retryInterval);
+      if (stuckTimerRef.current) clearTimeout(stuckTimerRef.current);
 
       if (widgetIdRef.current && window.turnstile) {
         window.turnstile.remove(widgetIdRef.current);
@@ -125,5 +187,19 @@ export default function TurnstileWidget({
     };
   }, []);
 
-  return <div ref={containerRef} />;
+  return (
+    <div>
+      <div ref={containerRef} />
+
+      {showStuckHelp && (
+        <button
+          type="button"
+          onClick={handleManualRetry}
+          className="mt-2 text-xs font-medium text-eduke-green hover:underline"
+        >
+          Taking a while to verify? Tap to try again
+        </button>
+      )}
+    </div>
+  );
 }
